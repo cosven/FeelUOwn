@@ -26,6 +26,8 @@ jobs:
         curl -L https://github.com/feeluown/FeelUOwn/releases/download/v3.8/mpv-1.dll -o mpv-1.dll
     - name: Bundle
       run: |
+        # Add current working directory to path so that mpv-1.dll can be found.
+        export PATH=$PATH:`pwd`
         make bundle
     - name: Archive
       run: |
