@@ -20,6 +20,10 @@ jobs:
         pip install pyqt5
         pip install pyinstaller
         pip install -e .[win32,battery]
+    - name: Download mpv-1.dll
+      run: |
+        choco install curl
+        curl -L https://github.com/feeluown/FeelUOwn/releases/download/v3.8/mpv-1.dll -o mpv-1.dll
     - name: Bundle
       run: |
         make bundle
