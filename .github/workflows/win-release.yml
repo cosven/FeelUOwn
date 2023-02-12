@@ -1,10 +1,10 @@
 name: Release for windows
 on:
-  - push:
-      tags:
-        - v*
-  - workflow_dispatch:
-      inputs: []
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs: []
 
 jobs:
   build-n-publish:
