@@ -31,6 +31,8 @@ jobs:
         make bundle
     - name: Archive
       run: |
+        # List dist to help double check if bundle is ok.
+        ls dist/
         powershell Compress-Archive dist/FeelUOwn dist/FeelUOwn-win64.zip
     - name: Upload artifact
       uses: actions/upload-artifact@master

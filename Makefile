@@ -44,6 +44,7 @@ test: lint unittest
 bundle:
 	pyinstaller -w feeluown/pyinstaller/main.py \
 		--icon feeluown/gui/assets/icons/feeluown.ico \
+		--name FeelUOwn \
 		-w \
 		--noconfirm
 
