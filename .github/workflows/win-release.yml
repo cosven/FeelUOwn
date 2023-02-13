@@ -27,7 +27,7 @@ jobs:
     - name: Bundle
       run: |
         # Add current working directory to path so that mpv-1.dll can be found.
-        export PATH=$PATH:`pwd`
+        $env:path += ";."
         make bundle
     - name: Archive
       run: |
