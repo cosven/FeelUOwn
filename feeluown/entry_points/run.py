@@ -23,6 +23,10 @@ def run():
     args = create_cli_parser().parse_args()
 
     if args.cmd is not None:  # Only need to run some commands.
+        if args.cmd == 'tui':
+            from .run_tui import run_tui  # noqa: E402
+            return run_tui(args)
+
         if args.cmd == 'genicon':
             return run_cli(args)
 

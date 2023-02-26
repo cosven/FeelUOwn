@@ -72,6 +72,7 @@ def add_common_cmds(subparsers: argparse._SubParsersAction):
     add_parser('list')
     add_parser('clear')
     add_parser('status')
+    add_parser('tui')
 
     # Initialize parsers.
     #

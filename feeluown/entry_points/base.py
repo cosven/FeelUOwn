@@ -3,12 +3,13 @@ import os
 import sys
 import warnings
 
-from feeluown import logger_config
 from feeluown.app import App
 from feeluown.consts import (
-    HOME_DIR, USER_PLUGINS_DIR, DATA_DIR,
+    LOG_FILE, HOME_DIR, USER_PLUGINS_DIR, DATA_DIR,
     CACHE_DIR, USER_THEMES_DIR, SONG_DIR, COLLECTIONS_DIR
 )
+from feeluown.utils.logger import configure_global_logger
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,8 @@ def setup_logger(config):
         verbose = 3
     else:
         verbose = config.VERBOSE
-    logger_config(verbose=verbose, to_file=config.LOG_TO_FILE)
+    if config.LOG_TO_FILE is True:
+        configure_global_logger(verbose=verbose, to_file=LOG_FILE)
     # Show deprecation warning when user does not set it.
     if not sys.warnoptions and verbose >= 2:
         warnings.simplefilter('default', DeprecationWarning)
