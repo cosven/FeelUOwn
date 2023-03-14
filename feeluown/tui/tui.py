@@ -1,9 +1,11 @@
 import logging
 import os
 
-from prompt_toolkit.application import Application
+from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Layout, HSplit, VSplit, Window
+from prompt_toolkit.layout import (
+    DynamicContainer, Layout, HSplit, VSplit, Window, ConditionalContainer,
+)
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Box, Frame, Button, TextArea
 
@@ -21,21 +23,35 @@ STYLE = Style([
 ])
 
 
+def landscape_orientation() -> bool:
+    size = get_app().output.get_size()
+    return size.rows * 2 < size.columns
+
+def portrait_orientation():
+    return not landscape_orientation()
+
+
 # Layout for displaying hello world.
 # (The frame creates the border, the box takes care of the margin/padding.)
 root_container = HSplit([
     FTable(),
-    Window(height=1),
-    VSplit([
-        Window(),
-        FButton('previous', lambda: logger.info('previous')),
-        Window(),
-        FButton('play', lambda: logger.info('play')),
-        Window(),
-        FButton('next', lambda: logger.info('next')),
-        Window(),
-    ]),
+    ConditionalContainer(
+        HSplit([
+            Window(),
+            VSplit([
+                Window(),
+                FButton('previous', lambda: logger.info('previous')),
+                Window(),
+                FButton('play', lambda: logger.info('play')),
+                Window(),
+                FButton('next', lambda: logger.info('next')),
+                Window(),
+            ]),
+        ]),
+        landscape_orientation,
+    ),
 ])
+
 layout = Layout(
     container=root_container,
     focused_element=root_container.children[-1],
@@ -46,7 +62,7 @@ layout = Layout(
 kb = KeyBindings()
 
 
-@kb.add("c-c")
+@kb.add("q")
 def _(event):
     "Quit when control-c is pressed."
     event.app.exit()
@@ -55,6 +71,11 @@ def _(event):
 @kb.add('tab')
 def _(event):
     event.app.layout.focus_next()
+
+
+class App(Application):
+    def _on_resize(self):
+        super()._on_resize()
 
 
 # Build a main application object.
