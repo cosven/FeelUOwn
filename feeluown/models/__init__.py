@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import warnings
+
+warnings.warn('please use v2 model instead', stacklevel=2)
+
 from feeluown.utils.reader import SequentialReader as GeneratorProxy  # noqa, for backward compatible
 from .base import (
     cached_field, ModelType, Model, ModelExistence, ModelStage,

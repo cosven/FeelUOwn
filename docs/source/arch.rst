@@ -13,7 +13,7 @@ app 对象，我们把它们放在 feeluown 包中。另外，我们也会创建
 ======   =================   =======================
 稳定         名字                模块
 ======   =================   =======================
-🔴       音乐资源模型          :py:mod:`feeluown.models`
+🔴       音乐资源模型          :py:mod:`feeluown.library`
 🔴       音乐库               :py:class:`feeluown.library.Library`
 🔴       播放器               :py:mod:`feeluown.player`
 🔴       fuo 协议             :py:class:`feeluown.protocol.FuoProcotol`

@@ -1,4 +1,4 @@
-from feeluown.models import Model as Struct, Model, ModelExistence
+from feeluown.library import Model as Struct, Model, ModelExistence
 
 
 def test_basic_usage():

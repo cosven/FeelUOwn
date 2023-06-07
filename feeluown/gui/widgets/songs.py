@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 from feeluown.utils import aio
 from feeluown.utils.dispatch import Signal
 from feeluown.library import ModelState, ModelFlags
-from feeluown.models import ModelExistence
+from feeluown.library.models import ModelExistence
 
 from feeluown.gui.mimedata import ModelMimeData
 from feeluown.gui.helpers import ItemViewNoScrollMixin, ReaderFetchMoreMixin
@@ -254,6 +254,7 @@ class BaseSongsTableModel(QAbstractTableModel):
             if song.state in (ModelState.not_exists, ModelState.cant_upgrade):
                 incomplete = True
         else:
+            # TODO: remove v1-model
             if song and song.exists == ModelExistence.no:
                 incomplete = True
         if incomplete:

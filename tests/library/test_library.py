@@ -4,7 +4,7 @@ import pytest
 
 from feeluown.library import Library, ModelType, BriefAlbumModel
 from feeluown.library.provider import dummy_provider
-from feeluown.models import SearchModel
+from feeluown.library import SearchModel
 
 
 def test_library_search(library):

@@ -12,7 +12,7 @@ from feeluown.library.model_protocol import (
     BriefUserProtocol, UserProtocol,
     VideoProtocol,
 )
-from feeluown.models import (
+from feeluown.library import (
     AlbumModel as AlbumModelV1,
     ArtistModel as ArtistModelV1,
     SongModel as SongModelV1,

@@ -1,8 +1,8 @@
 from collections import namedtuple
 from unittest import TestCase
 
-from feeluown.models import Model, BaseModel, display_property
-from feeluown.models import AlbumModel, AlbumType
+from feeluown.library import Model, BaseModel, display_property
+from feeluown.library import AlbumModel, AlbumType
 
 
 class FakeProvider:

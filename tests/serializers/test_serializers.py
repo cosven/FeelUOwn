@@ -2,7 +2,7 @@ from feeluown.app import App
 from feeluown.player import Player, Playlist
 from feeluown.serializers import serialize
 from feeluown.library import SongModel
-from feeluown.models import SongModel as SongModelV1
+from feeluown.library import SongModel as SongModelV1
 
 
 def test_serialize_app(mocker):

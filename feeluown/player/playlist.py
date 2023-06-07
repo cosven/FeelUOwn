@@ -73,7 +73,7 @@ class Playlist:
     def __init__(self, app, songs=None, playback_mode=PlaybackMode.loop,
                  audio_select_policy='hq<>'):
         """
-        :param songs: list of :class:`feeluown.models.SongModel`
+        :param songs: list of :class:`feeluown.library.SongModel`
         :param playback_mode: :class:`feeluown.player.PlaybackMode`
         """
         self._app = app

@@ -1,7 +1,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from feeluown.library import AlbumModel
-from feeluown.models import AlbumType
+from feeluown.library import AlbumType
 from .imglist import (
     ImgListModel, ImgListDelegate, ImgListView,
     ImgFilterProxyModel

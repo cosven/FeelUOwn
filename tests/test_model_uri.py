@@ -1,4 +1,4 @@
-from feeluown.models import BaseModel, ModelType, resolve, Resolver, reverse
+from feeluown.library import BaseModel, ModelType, resolve, Resolver, reverse
 from feeluown.library.provider import DummySongModel, DummyAlbumModel, DummyArtistModel
 
 

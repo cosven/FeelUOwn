@@ -132,7 +132,7 @@ provider 是我们访问具体一个音乐平台资源音乐的入口。
 
 我们预定义的音乐资源相关的模型有 6 种：歌曲，歌手，专辑，歌单，歌词，用户。
 
-.. autoclass:: feeluown.models.ModelType
+.. autoclass:: feeluown.library.ModelType
    :members:
    :undoc-members:
 
@@ -144,7 +144,7 @@ provider 是我们访问具体一个音乐平台资源音乐的入口。
 而每个模型都会有自己的的元信息，比如：这个模型是什么类型？有哪些字段？
 有哪些方法？这些元信息都会记录在模型的 inner class ``Meta`` 中。
 
-.. autoclass:: feeluown.models.BaseModel
+.. autoclass:: feeluown.library.BaseModel
 
    .. py:class:: Meta
 
@@ -249,7 +249,7 @@ model 可能会触发一个网络请求，从资源提供方的服务端来获�
 
    模型实例生命阶段更多细节可以参考 :ref:`model-stage` 。
 
-.. autoclass:: feeluown.models.BaseModel
+.. autoclass:: feeluown.library.BaseModel
 
    .. automethod:: __getattribute__
 
@@ -321,7 +321,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
 
 第二种：我们也可以通过展示字段和 ``identifier`` 来创建一个资源实例
 
-.. autoclass:: feeluown.models.BaseModel()
+.. autoclass:: feeluown.library.BaseModel()
 
    .. automethod:: create_by_display
 
@@ -352,7 +352,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
 如果支持，则实现 get 方法，get 方法返回的资源实例的字段应该 **尽可能**
 全部初始化，访问它的任何字段都应该 **尽可能** 不触发网络请求。
 
-.. autoclass:: feeluown.models.BaseModel
+.. autoclass:: feeluown.library.BaseModel
 
    .. py:class:: Meta
 
@@ -396,7 +396,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
 
 预定义的模型
 ''''''''''''''''''''
-.. autoclass:: feeluown.models.BaseModel
+.. autoclass:: feeluown.library.BaseModel
 
    .. py:class:: Meta
 
@@ -418,7 +418,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
          identifier   :class:`str`            model instance identifier
          ==========   =====================   ======================
 
-.. autoclass:: feeluown.models.SongModel
+.. autoclass:: feeluown.library.SongModel
    :members: artists_name, album_name, duration_ms, filename
    :undoc-members:
 
@@ -446,7 +446,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
       .. py:attribute:: fields_display
          :annotation: = [title, artists_name, album_name, duration_ms]
 
-.. autoclass:: feeluown.models.ArtistModel
+.. autoclass:: feeluown.library.ArtistModel
 
    .. py:class:: Meta
 
@@ -483,11 +483,11 @@ feeluown 提供了 RandomReader 类来实现这个功能
    .. automethod:: create_songs_g
 
 
-.. autoclass:: feeluown.models.AlbumType
+.. autoclass:: feeluown.library.AlbumType
    :members:
    :undoc-members:
 
-.. autoclass:: feeluown.models.AlbumModel
+.. autoclass:: feeluown.library.AlbumModel
    :members: artists_name
    :undoc-members:
 
@@ -510,7 +510,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
          type      :class:`AlbumType`
          ========  =====================   ======================
 
-.. autoclass:: feeluown.models.LyricModel
+.. autoclass:: feeluown.library.LyricModel
 
    .. py:class:: Meta
 
@@ -529,7 +529,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
          =============   =====================   ======================
 
 
-.. autoclass:: feeluown.models.MvModel
+.. autoclass:: feeluown.library.MvModel
 
    .. py:class:: Meta
 
@@ -547,7 +547,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
          =============   =====================   ======================
 
 
-.. autoclass:: feeluown.models.PlaylistModel
+.. autoclass:: feeluown.library.PlaylistModel
 
    .. py:class:: Meta
 
@@ -573,7 +573,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
    .. automethod:: remove
 
 
-.. autoclass:: feeluown.models.SearchModel
+.. autoclass:: feeluown.library.SearchModel
 
    .. py:class:: Meta
 
@@ -588,7 +588,7 @@ feeluown 提供了 RandomReader 类来实现这个功能
          =============   =====================   ======================
 
 
-.. autoclass:: feeluown.models.UserModel
+.. autoclass:: feeluown.library.UserModel
 
    .. py:class:: Meta
 

@@ -21,7 +21,7 @@ from .models import ModelFlags, BaseModel, ModelType, \
     ArtistModel, AlbumModel, PlaylistModel, BriefPlaylistModel, \
     fmt_artists_names, AlbumType, SimpleSearchResult, \
     get_modelcls_by_type, \
-    V2SupportedModelTypes
+    V2SupportedModelTypes, SearchType
 from .excs import NotSupported, NoUserLoggedIn, ModelNotFound, \
     ProviderAlreadyExists, ResourceNotFound, MediaNotFound
 from .provider_protocol import *

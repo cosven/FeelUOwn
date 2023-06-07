@@ -53,12 +53,180 @@ A: Obviously, we should not have too many `Model` for one Song. One `Model` is
 
 import time
 from typing import List, Optional, Tuple, Any
+from enum import IntEnum, Enum, IntFlag
 
 from pydantic import BaseModel as _BaseModel, PrivateAttr
 
-from feeluown.models import ModelType, ModelExistence, ModelStage, ModelFlags, AlbumType
 from feeluown.utils.utils import elfhash
 from .model_state import ModelState
+
+
+class ModelFlags(IntFlag):
+    none = 0x00000000
+
+    v1 = 0x00000001
+    v2 = 0x00000002
+
+    brief = 0x00000010
+    normal = brief | 0x00000020
+
+
+class ModelType(IntEnum):
+    dummy = 0
+
+    song = 1
+    artist = 2
+    album = 3
+    playlist = 4
+    lyric = 5
+    video = 6
+
+    user = 17
+    comment = 18
+
+    none = 128
+
+
+class SearchType(Enum):
+    pl = 'playlist'
+    al = 'album'
+    ar = 'artist'
+    so = 'song'
+    vi = 'video'
+
+    @classmethod
+    def parse(cls, obj):
+        """get member from object
+
+        :param obj: string or SearchType member
+        :return: SearchType member
+
+        >>> SearchType.parse('playlist')
+        <SearchType.pl: 'playlist'>
+        >>> SearchType.parse(SearchType.pl)
+        <SearchType.pl: 'playlist'>
+        >>> SearchType.parse('xxx')
+        Traceback (most recent call last):
+          ...
+        ValueError: 'xxx' is not a valid SearchType value
+        """
+        if isinstance(obj, SearchType):
+            return obj
+
+        type_aliases_map = {
+            cls.pl: ('playlist', 'pl'),
+            cls.al: ('album', 'al'),
+            cls.ar: ('artist', 'ar'),
+            cls.so: ('song', 'so'),
+            cls.vi: ('video', 'vi'),
+        }
+        for type_, aliases in type_aliases_map.items():
+            if obj in aliases:
+                return type_
+        raise ValueError("'%s' is not a valid SearchType value" % obj)
+
+    @classmethod
+    def batch_parse(cls, obj):
+        """get list of member from obj
+
+        :param obj: obj can be string, list of string or list of member
+        :return: list of member
+
+        >>> SearchType.batch_parse('pl,ar')
+        [<SearchType.pl: 'playlist'>, <SearchType.ar: 'artist'>]
+        >>> SearchType.batch_parse(['pl', 'ar'])
+        [<SearchType.pl: 'playlist'>, <SearchType.ar: 'artist'>]
+        >>> SearchType.batch_parse('al')
+        [<SearchType.al: 'album'>]
+        >>> SearchType.batch_parse(SearchType.al)
+        [<SearchType.al: 'album'>]
+        >>> SearchType.batch_parse([SearchType.al])
+        [<SearchType.al: 'album'>]
+        """
+        if isinstance(obj, SearchType):
+            return [obj]
+        if isinstance(obj, str):
+            return [cls.parse(s) for s in obj.split(',')]
+        return [cls.parse(s) for s in obj]
+
+
+class ModelStage(IntEnum):
+    """Model 所处的阶段，有大小关系
+
+    通过 create_by_display 工厂函数创建的实例，实例所处阶段为 display,
+    通过构造函数创建的实例，阶段为 inited, 如果 model 已经 get 过，
+    则阶段为 gotten.
+
+    目前，主要是 __getattribute__ 方法需要读取 model 所处的阶段，
+    避免重复 get model。
+    """
+    display = 4
+    inited = 8
+    gotten = 16
+
+
+class ModelExistence(IntEnum):
+    """资源是否真的存在
+
+    在许多音乐平台，当一个歌手、专辑不存在时，它们的接口可能构造一个
+    id 为 0, name 为 None 的字典。这类 model.exists 应该被置为 no。
+
+    这个字段不应该被缓存。
+    """
+    no = -1
+    unknown = 0
+    yes = 1
+
+
+class AlbumType(Enum):
+    """Album type enumeration
+
+    中文解释::
+
+        Single 和 EP 会有一些交集，在展示时，会在一起展示，比如 Singles & EPs。
+        Compilation 和 Retrospective 也会有交集，展示时，也通常放在一起，统称“合辑”。
+
+    References:
+
+    1. https://www.zhihu.com/question/22888388/answer/33255107
+    2. https://zh.wikipedia.org/wiki/%E5%90%88%E8%BC%AF
+    """
+    standard = 'standard'
+
+    single = 'single'
+    ep = 'EP'
+
+    live = 'live'
+
+    compilation = 'compilation'
+    retrospective = 'retrospective'
+
+    @classmethod
+    def guess_by_name(cls, name):
+        """guess album type by its name"""
+
+        # album name which contains following string are `Single`
+        #   1. ' - Single'  6+3=9
+        #   2. '(single)'   6+2=8
+        #   3. '（single）'  6+2=8
+        if 'single' in name[-9:].lower():
+            return cls.single
+
+        # ' - EP'
+        if 'ep' in name[-5:].lower():
+            return cls.ep
+
+        if 'live' in name or '演唱会' in name or \
+           '音乐会' in name:
+            return cls.live
+
+        # '精选集', '精选'
+        if '精选' in name[-3:]:
+            return cls.retrospective
+
+        return cls.standard
+
+
 
 
 def fmt_artists_names(names: List[str]) -> str:

@@ -103,7 +103,7 @@ class Collection:
     def add(self, model):
         """add model to collection
 
-        :param model: :class:`feeluown.models.BaseModel`
+        :param model: :class:`feeluown.library.BaseModel`
         :return: True means succeed, False means failed
         """
         if model not in self.models:
