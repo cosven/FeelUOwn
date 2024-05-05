@@ -33,8 +33,14 @@ class Separator(QFrame):
     def on_theme_changed(self, theme):
         if theme == 'dark':
             self.setStyleSheet(stylesheet.format('#444'))
-            self.setMaximumHeight(1)
+            if self.frameShape() == QFrame.HLine:
+                self.setMaximumHeight(1)
+            else:
+                self.setMaximumWidth(1)
         else:
             self.setStyleSheet('')
             self.setFrameShadow(QFrame.Sunken)
-            self.setMaximumHeight(2)
+            if self.frameShape() == QFrame.HLine:
+                self.setMaximumHeight(2)
+            else:
+                self.setMaximumWidth(2)

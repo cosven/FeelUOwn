@@ -1,10 +1,3 @@
-TopPanel {
-    background-color: qlineargradient(
-        x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #EEE, stop: 0.4 #DDD, stop: 0.7 #CCC, stop: 1 #BBB
-    );
-}
-
 TextButton {
     border: 1px solid #AAA;
 }

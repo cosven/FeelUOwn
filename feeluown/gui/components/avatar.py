@@ -123,7 +123,8 @@ class Avatar(SelfPaintAbstractSquareButton):
             if img_data:
                 self._avatar_drawer = PixmapDrawer.from_img_data(img_data,
                                                                  self,
-                                                                 radius=0.5)
+                                                                 radius=0.5,
+                                                                 )
         return user
 
     def paintEvent(self, _):

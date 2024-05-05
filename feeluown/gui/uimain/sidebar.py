@@ -119,6 +119,7 @@ class _LeftPanel(QFrame):
         self._app = app
 
         self.home_btn = HomeButton(height=30, parent=self)
+        self.home_btn.hide()
         self.discovery_btn = DiscoveryButton(height=30, padding=0.2, parent=self)
         self.fav_btn = StarButton('我的收藏', height=30, parent=self)
         self.collections_header = QLabel('本地收藏集', self)

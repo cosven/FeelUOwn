@@ -313,6 +313,31 @@ class HomeButton(SelfPaintAbstractIconTextButton):
         self.home_icon.paint(painter)
 
 
+class HomeButton2(SelfPaintAbstractSquareButton):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.drawer = HomeIconDrawer(self.height(), self._padding)
+
+    def paintEvent(self, _):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        self.paint_round_bg_when_hover(painter)
+        self.drawer.paint(painter)
+
+
+class StarButton2(SelfPaintAbstractSquareButton):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.drawer = StarIconDrawer(self.height(), self._padding)
+
+    def paintEvent(self, _):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        self.paint_round_bg_when_hover(painter)
+        self.drawer.paint(painter)
+
+
 class CalendarButton(SelfPaintAbstractIconTextButton):
 
     def __init__(self, text='日历', *args, **kwargs):

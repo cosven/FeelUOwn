@@ -1,5 +1,5 @@
 import logging
-from PyQt5.QtWidgets import QSizePolicy, QSplitter, QVBoxLayout
+from PyQt5.QtWidgets import QSizePolicy, QSplitter, QVBoxLayout, QHBoxLayout
 
 from feeluown.gui.widgets.separator import Separator
 from feeluown.gui.widgets.settings import SettingsDialog
@@ -12,6 +12,7 @@ from feeluown.gui.uimain.page_view import RightPanel
 from feeluown.gui.uimain.player_bar import TopPanel
 from feeluown.gui.uimain.playlist_overlay import PlaylistOverlay
 from feeluown.gui.uimain.nowplaying_overlay import NowplayingOverlay
+from feeluown.gui.uimain.navbar import Navbar
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,6 @@ class Ui:
         self._app = app
         # Let the following widgets access ui object during init.
         self._app.ui = self
-        self._layout = QVBoxLayout(app)
-        self._top_separator = Separator(app)
-        self._splitter = QSplitter(app)
 
         # Create widgets that don't rely on other widgets first.
         self.lyric_window = LyricWindow(self._app)
@@ -35,8 +33,9 @@ class Ui:
         self._message_line = MessageLine()
         self.top_panel = TopPanel(app, app)
         self.sidebar = self._left_panel_con = LeftPanel(self._app)
+        self.navbar = Navbar(self._app)
         self.left_panel = self._left_panel_con.p
-        self.page_view = self.right_panel = RightPanel(self._app, self._splitter)
+        self.page_view = self.right_panel = RightPanel(self._app)
         self.toolbar = self.bottom_panel = self.right_panel.bottom_panel
         self.mpv_widget = MpvOpenGLWidget(self._app)
         self.playlist_overlay = PlaylistOverlay(app, parent=app)
@@ -59,6 +58,11 @@ class Ui:
     def _setup_ui(self):
         self._app.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
+        self._layout = QVBoxLayout(self._app)
+        self._root_layout = QHBoxLayout()
+        self._top_separator = Separator(self._app)
+
+        self._splitter = QSplitter(self._app)
         self._splitter.setHandleWidth(0)
         self._splitter.addWidget(self._left_panel_con)
         self._splitter.addWidget(self.right_panel)
@@ -68,12 +72,18 @@ class Ui:
 
         self.right_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self._layout.addWidget(self._splitter)
+        self._root_layout.addWidget(self.navbar)
+        self._root_layout.addWidget(Separator(self._app, 'vertical'))
+        self._layout.addLayout(self._root_layout)
+        self._root_layout.addWidget(self._splitter)
+
         self._layout.addWidget(self.mpv_widget)
         self._layout.addWidget(self._message_line)
         self._layout.addWidget(self._top_separator)
         self._layout.addWidget(self.top_panel)
 
+        self._root_layout.setSpacing(0)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self.top_panel.layout().setSpacing(0)
