@@ -1,4 +1,9 @@
+from typing import TYPE_CHECKING
+
 from PyQt5.QtWidgets import QFrame
+
+if TYPE_CHECKING:
+    from feeluown.app.gui_app import GuiApp
 
 
 stylesheet = '''
@@ -12,7 +17,7 @@ QFrame[frameShape="5"]
 
 
 class Separator(QFrame):
-    def __init__(self, app, orientation='horizontal'):
+    def __init__(self, app: 'GuiApp', orientation='horizontal'):
         super().__init__(parent=None)
 
         self._app = app
@@ -22,8 +27,14 @@ class Separator(QFrame):
         else:
             self.setFrameShape(QFrame.VLine)
 
-        if self._app.theme_mgr.theme == 'dark':
-            self.setStyleSheet(stylesheet.format('#232323'))
+        self.on_theme_changed(self._app.theme_mgr.theme)
+        self._app.theme_mgr.theme_changed.connect(self.on_theme_changed)
+
+    def on_theme_changed(self, theme):
+        if theme == 'dark':
+            self.setStyleSheet(stylesheet.format('#444'))
             self.setMaximumHeight(1)
         else:
+            self.setStyleSheet('')
             self.setFrameShadow(QFrame.Sunken)
+            self.setMaximumHeight(2)

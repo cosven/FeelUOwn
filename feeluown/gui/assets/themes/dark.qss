@@ -10,10 +10,6 @@ TopPanel {
     );
 }
 
-Separator {
-    background-color: #444;
-}
-
 TextButton {
     border: 1px solid #444;
 }
