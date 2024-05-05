@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QTimer, QRect, Qt
+from PyQt5.QtCore import QTimer, QRect, Qt, QSize
 from PyQt5.QtGui import QPainter, QPalette, QColor
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QMenu, QVBoxLayout, QWidget
 
@@ -118,9 +118,12 @@ class LineSongLabel(QLabel):
 class TwoLineSongLabel(QWidget):
     default_text = '...'
 
-    def __init__(self, app: 'GuiApp', parent=None):
+    def __init__(self, app: 'GuiApp', parent=None, font_size=25, secondary_font_size=20):
         super().__init__(parent=parent)
         self._app = app
+
+        self._title = '...'
+        self._subtitle = ''
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
@@ -135,32 +138,37 @@ class TwoLineSongLabel(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(5)
+        self._layout.addStretch(0)
         self._layout.addWidget(self._title_label)
         self._layout.addWidget(self._subtitle_label)
+        self._layout.addStretch(0)
         self._app.player.metadata_changed.connect(
             self.on_metadata_changed, aioqueue=True
         )
 
         font = self.font()
-        font.setPixelSize(25)
+        font.setPixelSize(font_size)
         font.setBold(True)
         self._title_label.setFont(font)
-        font.setPixelSize(20)
+        font.setPixelSize(secondary_font_size)
         font.setBold(False)
         self._subtitle_label.setFont(font)
 
     def on_metadata_changed(self, metadata):
         if not metadata:
-            self._title_label.setText('...')
+            self._title = '...'
+            self._title_label.setText(self._title)
             return
 
         # Set main text.
         title = metadata.get('title', '')
+        self._title = title
         if title:
             artists = metadata.get('artists', [])
             if artists:
                 # FIXME: use _get_artists_name
                 subtitle = fmt_artists_names(artists)
+                self._subtitle = subtitle
                 self._subtitle_label.setText(
                     elided_text(
                         subtitle, self._subtitle_label.width(),
@@ -170,3 +178,8 @@ class TwoLineSongLabel(QWidget):
         self._title_label.setText(
             elided_text(title, self._title_label.width(), self._title_label.font())
         )
+
+    def sizeHint(self):
+        fm = self._title_label.fontMetrics()
+        width = fm.boundingRect(self._title).width()
+        return QSize(width, super().sizeHint().height())

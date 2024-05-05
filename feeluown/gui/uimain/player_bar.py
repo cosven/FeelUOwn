@@ -12,6 +12,7 @@ from feeluown.gui.widgets.labels import ProgressLabel, DurationLabel
 from feeluown.gui.components import (
     LineSongLabel, MediaButtonsV2, LyricButton, WatchButton, LikeButton,
     NowplayingMVTextButton, PlaylistButton, SongSourceTag,
+    TwoLineSongLabel,
 )
 from feeluown.gui.helpers import IS_MACOS, ClickableMixin
 
@@ -65,9 +66,9 @@ class PlayerControlPanel(QFrame):
         self.download_btn.setToolTip('下载歌曲（未实现，欢迎 PR）')
         self.download_btn.setCheckable(True)
 
-        self.song_title_label = LineSongLabel(self._app)
-        self.song_title_label.setAlignment(Qt.AlignCenter)
+        self.song_title_label = TwoLineSongLabel(self._app, font_size=13, secondary_font_size=13)
         self.song_source_label = SongSourceTag(self._app, parent=self)
+        self.song_source_label.hide()
 
         self.cover_label = ClickableCover(app)
         self.duration_label = DurationLabel(app, parent=self)
@@ -88,13 +89,14 @@ class PlayerControlPanel(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.cover_label.setFixedWidth(44)
-        self.cover_label.setMaximumHeight(44)
+        self.cover_label.setFixedWidth(60)
+        self.cover_label.setMaximumHeight(60)
         self.song_source_label.setFixedHeight(20)
         if IS_MACOS:
             self.progress_slider.setFixedHeight(25)  # half of parent height
         else:
             self.progress_slider.setFixedHeight(20)  # half of parent height
+        self.progress_slider.setMaximumWidth(500)
         self.position_label.setFixedWidth(50)
         self.duration_label.setFixedWidth(50)
         self.position_label.setAlignment(Qt.AlignCenter)
@@ -106,65 +108,54 @@ class PlayerControlPanel(QFrame):
 
         self.progress_slider.setSizePolicy(QSizePolicy.Expanding,
                                            QSizePolicy.Preferred)
-        self._sub_layout = QVBoxLayout()
-        self._sub_top_layout = QHBoxLayout()
-        self._progress_v_layout = QVBoxLayout()
+        self._center_wrapper_layout = QHBoxLayout()
+        self._center_layout = QVBoxLayout()
+        self._center_top_layout = QHBoxLayout()
         self._cover_v_layout = QVBoxLayout()
+        self._btns_layout = QHBoxLayout()
+        self._btns_layout.setSpacing(8)
 
-        # add space to make top layout align with progress slider
-        self._sub_top_layout.addSpacing(3)
-        self._sub_top_layout.addWidget(self.song_source_label)
-        self._sub_top_layout.addSpacing(5)
-        self._sub_top_layout.addWidget(self.song_title_label)
-        self._sub_top_layout.addSpacing(5)
-        self._sub_top_layout.addWidget(self.like_btn)
-        self._sub_top_layout.addSpacing(8)
-        self._sub_top_layout.addWidget(self.mv_btn)
-        self._sub_top_layout.addSpacing(8)
-        self._sub_top_layout.addWidget(self.toggle_lyric_btn)
-        self._sub_top_layout.addSpacing(8)
-        self._sub_top_layout.addWidget(self.toggle_watch_btn)
-        # self._sub_top_layout.addSpacing(8)
-        # self._sub_top_layout.addWidget(self.download_btn)
-        self._sub_top_layout.addSpacing(3)
+        self._center_top_layout.addStretch(0)
+        self._center_top_layout.addWidget(self.media_btns)
+        self._center_top_layout.addStretch(0)
 
-        self._sub_layout.addSpacing(3)
-        self._sub_layout.addStretch(0)
-        self._sub_layout.addLayout(self._sub_top_layout)
-        self._sub_layout.addStretch(0)
-        self._sub_layout.addWidget(self.progress_slider)
-        self._sub_layout.addStretch(0)
+        self._center_layout.addStretch(0)
+        self._center_layout.addLayout(self._center_top_layout)
+        self._center_layout.addStretch(0)
+        self._center_layout.addWidget(self.progress_slider)
+        self._center_layout.addStretch(0)
 
-        self._progress_v_layout.addStretch(0)
-        self._progress_v_layout.addWidget(self.position_label)
-        self._progress_v_layout.addSpacing(3)
-        self._progress_v_layout.addWidget(self.duration_label)
-        self._progress_v_layout.addStretch(0)
+        self._center_wrapper_layout.addWidget(self.position_label)
+        self._center_wrapper_layout.addSpacing(3)
+        self._center_wrapper_layout.addLayout(self._center_layout)
+        self._center_wrapper_layout.addSpacing(3)
+        self._center_wrapper_layout.addWidget(self.duration_label)
+
+        self._btns_layout.addWidget(self.volume_btn)
+        self._btns_layout.addWidget(self.mv_btn)
+        self._btns_layout.addWidget(self.toggle_lyric_btn)
+        self._btns_layout.addWidget(self.toggle_watch_btn)
+        self._btns_layout.addWidget(self.playlist_btn)
 
         # Put the cover_label in a vboxlayout and add strech around it,
         # so that cover_label's sizehint is respected.
-        self._cover_v_layout.addStretch(0)
+        _cover_margins = [(60 - self.cover_label.width()) // 2] * 4
+        self._cover_v_layout.setContentsMargins(*_cover_margins)
         self._cover_v_layout.addWidget(self.cover_label)
-        self._cover_v_layout.addStretch(0)
 
-        self._layout.addSpacing(20)
-        self._layout.addWidget(self.media_btns)
-        self._layout.addSpacing(26)
-        self._layout.addWidget(self.volume_btn)
-        # 18 = 200(left_panel_width) - 4 * 30(btn) - 20 - 8 - 8 -26
-        self._layout.addSpacing(50)
-        self._layout.addSpacing(18)
-        self._layout.addStretch(0)
         self._layout.addLayout(self._cover_v_layout)
-        self._layout.addSpacing(7)
-        self._layout.addLayout(self._sub_layout)
-        self._layout.setStretchFactor(self._sub_layout, 1)
-        self._layout.addSpacing(7)
-        self._layout.addLayout(self._progress_v_layout)
+        self._layout.addSpacing(10)
+        self._layout.addWidget(self.song_title_label)
+        self._layout.addSpacing(10)
+        self._layout.addWidget(self.like_btn)
         self._layout.addStretch(0)
-        self._layout.addSpacing(18)
-        self._layout.addWidget(self.playlist_btn)
-        self._layout.addSpacing(18)
+        self._layout.addSpacing(30)
+        self._layout.addLayout(self._center_wrapper_layout)
+        self._layout.addSpacing(30)
+        self._layout.addStretch(0)
+        self._layout.addLayout(self._btns_layout)
+
+        self._layout.setStretchFactor(self._center_wrapper_layout, 1)
         self._layout.setSpacing(0)
         self._layout.setContentsMargins(0, 0, 0, 0)
 
