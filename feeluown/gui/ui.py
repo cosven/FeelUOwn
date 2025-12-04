@@ -2,7 +2,7 @@ import logging
 from PyQt6.QtWidgets import QSizePolicy, QSplitter, QVBoxLayout
 
 from feeluown.gui.widgets.separator import Separator
-from feeluown.gui.widgets.settings import SettingsDialog
+from feeluown.gui.widgets.settings import create_settings_overlay
 from feeluown.gui.widgets.messageline import MessageLine
 from feeluown.gui.widgets.mpv_ import MpvOpenGLWidget
 
@@ -59,7 +59,7 @@ class Ui:
         self.back_btn = self.bottom_panel.back_btn
         self.forward_btn = self.bottom_panel.forward_btn
 
-        self.toolbar.settings_btn.clicked.connect(self._open_settings_dialog)
+        self.toolbar.settings_btn.clicked.connect(self._open_settings_overlay)
 
         self._setup_ui()
 
@@ -92,9 +92,9 @@ class Ui:
 
         self._app.resize(960, 600)
 
-    def _open_settings_dialog(self):
-        dialog = SettingsDialog(self._app, self._app)
-        dialog.exec()
+    def _open_settings_overlay(self):
+        overlay = create_settings_overlay(self._app, parent=self._app)
+        overlay.show()
 
     def toggle_player_bar(self):
         if self.top_panel.isVisible():

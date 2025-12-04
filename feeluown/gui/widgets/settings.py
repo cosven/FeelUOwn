@@ -1,6 +1,5 @@
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog,
     QWidget,
     QCheckBox,
     QVBoxLayout,
@@ -12,6 +11,7 @@ from PyQt6.QtWidgets import (
 from feeluown.gui.widgets.magicbox import KeySourceIn
 from feeluown.gui.widgets.header import MidHeader
 from feeluown.gui.components import LyricButton, WatchButton
+from feeluown.gui.components.overlay import AppOverlayContainer
 
 
 class _ProviderCheckBox(QCheckBox):
@@ -92,15 +92,15 @@ class AISettings(QWidget):
         self._app.config.AI_RADIO_PROMPT = self._prompt_editor.toPlainText()
 
 
-class SettingsDialog(QDialog):
+class SettingsBody(QWidget):
     def __init__(self, app, parent=None):
         super().__init__(parent=parent)
         self._app = app
+        self._setup_ui()
 
-        self.setWindowTitle("应用配置")
-        self.render()
+    def _setup_ui(self):
+        self.setAutoFillBackground(True)
 
-    def render(self):
         source_in_str = self._app.browser.local_storage.get(KeySourceIn)
         if source_in_str is not None:
             source_in = source_in_str.split(",")
@@ -108,7 +108,7 @@ class SettingsDialog(QDialog):
             source_in = [p.identifier for p in self._app.library.list()]
         toolbar = SearchProvidersFilter(self._app.library.list())
         toolbar.set_checked_providers(source_in)
-        toolbar.checked_btn_changed.connect(self.update_source_in)
+        toolbar.checked_btn_changed.connect(self._update_source_in)
 
         self._layout = QVBoxLayout(self)
         self._layout.addWidget(MidHeader("搜索来源"))
@@ -119,5 +119,12 @@ class SettingsDialog(QDialog):
         self._layout.addWidget(PlayerSettings(self._app))
         self._layout.addStretch(0)
 
-    def update_source_in(self, source_in):
+    def _update_source_in(self, source_in):
         self._app.browser.local_storage[KeySourceIn] = ",".join(source_in)
+
+
+def create_settings_overlay(app, parent=None):
+    """Create an overlay for settings."""
+    body = SettingsBody(app)
+    overlay = AppOverlayContainer(app, body, parent=parent, adhoc=True)
+    return overlay
