@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 from contextlib import contextmanager
@@ -111,6 +112,7 @@ class App:
         self.player.set_playlist(self.playlist)
 
         self.about_to_shutdown.connect(lambda _: self.dump_and_save_state(), weak=False)
+        self._state_save_task = None
 
     def initialize(self):
         self.coll_mgr.scan()
@@ -120,6 +122,39 @@ class App:
         self.playlist.song_changed.connect(self.live_lyric.on_song_changed,
                                            aioqueue=True)
         self.plugin_mgr.enable_plugins(self)
+        self._start_state_save_timer()
+
+    def _start_state_save_timer(self):
+        """Start a periodic task to save state."""
+        interval = self.config.STATE_SAVE_INTERVAL
+        if interval <= 0:
+            logger.info(f'State save timer disabled (interval={interval})')
+            return
+
+        logger.info(f'Starting state save timer with interval {interval} seconds')
+
+        async def save_loop():
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    self.dump_and_save_state()
+                except Exception as e:
+                    logger.exception('Failed to save state: %s', e)
+
+        task = self.task_mgr.run_afn_preemptive(
+            save_loop, name='state-save-loop'
+        )
+        self._state_save_task = task
+
+    def _stop_state_save_timer(self):
+        """Stop the periodic state save task."""
+        if self._state_save_task is not None:
+            try:
+                self._state_save_task.cancel()
+            except Exception as e:
+                logger.exception(f'Failed to cancel state save task: {e}')
+            self._state_save_task = None
+            logger.info('State save timer stopped')
 
     def run(self):
         pass
@@ -245,7 +280,7 @@ class App:
         logger.info("Dump and save app state")
         state = self.dump_state()
         with open(STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(state, f)
+            json.dump(state, f, indent=2)
 
     @contextmanager
     def create_action(self, s):  # pylint: disable=no-self-use
@@ -280,6 +315,7 @@ class App:
 
     def about_to_exit(self):
         logger.info('Do graceful shutdown')
+        self._stop_state_save_timer()
         try:
             self.about_to_shutdown.emit(self)
             self.player_pos_per300ms.stop()

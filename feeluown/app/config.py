@@ -79,6 +79,12 @@ def create_config() -> Config:
         'PLAYBACK_CROSSFADE_DURATION', type_=int, default=500, desc='淡入淡出持续时间'
     )
     config.deffield(
+        'STATE_SAVE_INTERVAL',
+        type_=int,
+        default=300,
+        desc='自动保存状态的间隔时间（秒），0 表示禁用'
+    )
+    config.deffield(
         'OPENAI_API_BASEURL',
         type_=str,
         default='',
