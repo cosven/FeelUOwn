@@ -194,6 +194,45 @@ class ReaderProvider:
         return ["arc1", "arc2"]
 
 
+class CurrentUserProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_radio_count = None
+        self.user = SimpleNamespace(marker="user")
+
+    def has_current_user(self):
+        return True
+
+    def get_current_user(self):
+        return self.user
+
+    def get_current_user_or_none(self):
+        return self.user
+
+    def current_user_list_playlists(self):
+        return ["upl1", "upl2"]
+
+    def current_user_list_radio_songs(self, count):
+        self.last_radio_count = count
+        return ["urs1", "urs2"]
+
+    def current_user_fav_create_songs_rd(self):
+        return ["ufs1", "ufs2"]
+
+    def current_user_fav_create_albums_rd(self):
+        return ["ufa1", "ufa2"]
+
+    def current_user_fav_create_artists_rd(self):
+        return ["ufar1", "ufar2"]
+
+    def current_user_fav_create_playlists_rd(self):
+        return ["ufp1", "ufp2"]
+
+    def current_user_fav_create_videos_rd(self):
+        return ["ufv1", "ufv2"]
+
+
 def test_nowplaying_resource(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
     mocker.patch("feeluown.mcpserver.serialize", return_value={"title": "demo"})
@@ -556,3 +595,71 @@ def test_provider_playlist_list_songs_unsupported(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
 
     assert mcpserver.provider_playlist_list_songs("fake", "pl1") is None
+
+
+def test_provider_current_user_get(mocker, app):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, obj: {"marker": obj.marker},
+    )
+
+    payload = mcpserver.provider_current_user_get("fake")
+
+    assert payload == {"marker": "user"}
+
+
+def test_provider_current_user_list_tools(mocker, app):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_current_user_list_playlists("fake", limit=1)
+    assert payload == ["upl1"]
+
+    payload = mcpserver.provider_current_user_list_radio_songs(
+        "fake",
+        count=3,
+        limit=1,
+    )
+    assert payload == ["urs1"]
+    assert provider.last_radio_count == 3
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("provider_current_user_fav_list_songs", "ufs1"),
+        ("provider_current_user_fav_list_albums", "ufa1"),
+        ("provider_current_user_fav_list_artists", "ufar1"),
+        ("provider_current_user_fav_list_playlists", "ufp1"),
+        ("provider_current_user_fav_list_videos", "ufv1"),
+    ],
+)
+def test_provider_current_user_fav_list_tools(mocker, app, tool_name, expected):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    tool = getattr(mcpserver, tool_name)
+    payload = tool("fake", limit=1)
+
+    assert payload == [expected]
+
+
+def test_provider_current_user_get_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_current_user_get("fake") is None

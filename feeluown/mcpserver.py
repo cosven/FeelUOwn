@@ -22,6 +22,11 @@ from feeluown.library.provider_protocol import (
     SupportsArtistContributedAlbumsReader,
     SupportsArtistSongsReader,
     SupportsCurrentUser,
+    SupportsCurrentUserFavAlbumsReader,
+    SupportsCurrentUserFavArtistsReader,
+    SupportsCurrentUserFavPlaylistsReader,
+    SupportsCurrentUserFavSongsReader,
+    SupportsCurrentUserFavVideosReader,
     SupportsCurrentUserListPlaylists,
     SupportsCurrentUserListRadioSongs,
     SupportsPlaylistSongsReader,
@@ -57,6 +62,11 @@ _PROTOCOLS = (
     SupportsArtistContributedAlbumsReader,
     SupportsArtistSongsReader,
     SupportsCurrentUser,
+    SupportsCurrentUserFavAlbumsReader,
+    SupportsCurrentUserFavArtistsReader,
+    SupportsCurrentUserFavPlaylistsReader,
+    SupportsCurrentUserFavSongsReader,
+    SupportsCurrentUserFavVideosReader,
     SupportsCurrentUserListPlaylists,
     SupportsCurrentUserListRadioSongs,
     SupportsPlaylistSongsReader,
@@ -181,6 +191,23 @@ def _provider_model_list(
     try:
         model = model_builder(provider_id, identifier)
         reader = getattr(provider, list_method_name)(model)
+        models = reader.readall() if hasattr(reader, "readall") else list(reader)
+    except Exception:
+        return None
+    return serialize("python", _limit_models(models, limit))
+
+
+def _provider_noarg_list(
+    provider_id: str,
+    protocol,
+    list_method_name: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, protocol):
+        return None
+    try:
+        reader = getattr(provider, list_method_name)()
         models = reader.readall() if hasattr(reader, "readall") else list(reader)
     except Exception:
         return None
@@ -565,6 +592,119 @@ def provider_video_get_web_url(provider_id: str, video_id: str) -> str | None:
         return provider.video_get_web_url(_build_brief_video(provider_id, video_id))
     except Exception:
         return None
+
+
+@mcp.tool()
+def provider_current_user_get(provider_id: str) -> dict[str, Any] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsCurrentUser):
+        return None
+    try:
+        if hasattr(provider, "get_current_user_or_none"):
+            user = provider.get_current_user_or_none()
+        else:
+            user = provider.get_current_user()
+    except Exception:
+        return None
+    if user is None:
+        return None
+    return serialize("python", user)
+
+
+@mcp.tool()
+def provider_current_user_list_playlists(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserListPlaylists,
+        "current_user_list_playlists",
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_current_user_list_radio_songs(
+    provider_id: str,
+    count: int = 20,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsCurrentUserListRadioSongs):
+        return None
+    try:
+        songs = provider.current_user_list_radio_songs(count)
+    except Exception:
+        return None
+    if songs is None:
+        return None
+    return serialize("python", _limit_models(songs, limit))
+
+
+@mcp.tool()
+def provider_current_user_fav_list_songs(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserFavSongsReader,
+        "current_user_fav_create_songs_rd",
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_current_user_fav_list_albums(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserFavAlbumsReader,
+        "current_user_fav_create_albums_rd",
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_current_user_fav_list_artists(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserFavArtistsReader,
+        "current_user_fav_create_artists_rd",
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_current_user_fav_list_playlists(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserFavPlaylistsReader,
+        "current_user_fav_create_playlists_rd",
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_current_user_fav_list_videos(
+    provider_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    return _provider_noarg_list(
+        provider_id,
+        SupportsCurrentUserFavVideosReader,
+        "current_user_fav_create_videos_rd",
+        limit,
+    )
 
 
 @mcp.tool()
