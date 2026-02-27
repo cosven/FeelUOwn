@@ -233,6 +233,32 @@ class CurrentUserProvider:
         return ["ufv1", "ufv2"]
 
 
+class PlaylistMutationProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_create_name = None
+        self.last_delete_id = None
+        self.last_add_args = None
+        self.last_remove_args = None
+
+    def playlist_create_by_name(self, name):
+        self.last_create_name = name
+        return SimpleNamespace(marker="playlist-created")
+
+    def playlist_delete(self, playlist_id):
+        self.last_delete_id = playlist_id
+        return True
+
+    def playlist_add_song(self, playlist, song):
+        self.last_add_args = (playlist, song)
+        return True
+
+    def playlist_remove_song(self, playlist, song):
+        self.last_remove_args = (playlist, song)
+        return True
+
+
 def test_nowplaying_resource(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
     mocker.patch("feeluown.mcpserver.serialize", return_value={"title": "demo"})
@@ -663,3 +689,48 @@ def test_provider_current_user_get_unsupported(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
 
     assert mcpserver.provider_current_user_get("fake") is None
+
+
+def test_provider_playlist_mutation_tools(mocker, app):
+    provider = PlaylistMutationProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, obj: {"marker": obj.marker},
+    )
+
+    payload = mcpserver.provider_playlist_create_by_name("fake", "my-list")
+    assert payload == {"marker": "playlist-created"}
+    assert provider.last_create_name == "my-list"
+
+    payload = mcpserver.provider_playlist_delete("fake", "pl1")
+    assert payload is True
+    assert provider.last_delete_id == "pl1"
+
+    payload = mcpserver.provider_playlist_add_song("fake", "pl1", "so1")
+    assert payload is True
+    playlist_arg, song_arg = provider.last_add_args
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+    payload = mcpserver.provider_playlist_remove_song("fake", "pl1", "so1")
+    assert payload is True
+    playlist_arg, song_arg = provider.last_remove_args
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+
+def test_provider_playlist_mutation_tools_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_playlist_create_by_name("fake", "n") is None
+    assert mcpserver.provider_playlist_delete("fake", "pl1") is None
+    assert mcpserver.provider_playlist_add_song("fake", "pl1", "so1") is None
+    assert mcpserver.provider_playlist_remove_song("fake", "pl1", "so1") is None

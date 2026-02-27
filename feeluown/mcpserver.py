@@ -595,6 +595,74 @@ def provider_video_get_web_url(provider_id: str, video_id: str) -> str | None:
 
 
 @mcp.tool()
+def provider_playlist_create_by_name(
+    provider_id: str,
+    name: str,
+) -> dict[str, Any] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsPlaylistCreateByName):
+        return None
+    try:
+        playlist = provider.playlist_create_by_name(name)
+    except Exception:
+        return None
+    if playlist is None:
+        return None
+    return serialize("python", playlist)
+
+
+@mcp.tool()
+def provider_playlist_delete(provider_id: str, playlist_id: str) -> bool | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsPlaylistDelete):
+        return None
+    try:
+        return bool(provider.playlist_delete(playlist_id))
+    except Exception:
+        return None
+
+
+@mcp.tool()
+def provider_playlist_add_song(
+    provider_id: str,
+    playlist_id: str,
+    song_id: str,
+) -> bool | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsPlaylistAddSong):
+        return None
+    try:
+        return bool(
+            provider.playlist_add_song(
+                _build_brief_playlist(provider_id, playlist_id),
+                _build_brief_song(provider_id, song_id),
+            )
+        )
+    except Exception:
+        return None
+
+
+@mcp.tool()
+def provider_playlist_remove_song(
+    provider_id: str,
+    playlist_id: str,
+    song_id: str,
+) -> bool | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsPlaylistRemoveSong):
+        return None
+    try:
+        return bool(
+            provider.playlist_remove_song(
+                _build_brief_playlist(provider_id, playlist_id),
+                _build_brief_song(provider_id, song_id),
+            )
+        )
+    except Exception:
+        return None
+
+
+@mcp.tool()
 def provider_current_user_get(provider_id: str) -> dict[str, Any] | None:
     provider = _provider_from_id(provider_id)
     if provider is None or not isinstance(provider, SupportsCurrentUser):
