@@ -165,6 +165,35 @@ class VideoProvider:
         return "https://example.com/video"
 
 
+class ReaderProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_playlist = None
+        self.last_album = None
+        self.last_artist = None
+
+    def playlist_create_songs_rd(self, playlist):
+        self.last_playlist = playlist
+        return ["ps1", "ps2"]
+
+    def album_create_songs_rd(self, album):
+        self.last_album = album
+        return ["as1", "as2"]
+
+    def artist_create_songs_rd(self, artist):
+        self.last_artist = artist
+        return ["ars1", "ars2"]
+
+    def artist_create_albums_rd(self, artist):
+        self.last_artist = artist
+        return ["ara1", "ara2"]
+
+    def artist_create_contributed_albums_rd(self, artist):
+        self.last_artist = artist
+        return ["arc1", "arc2"]
+
+
 def test_nowplaying_resource(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
     mocker.patch("feeluown.mcpserver.serialize", return_value={"title": "demo"})
@@ -459,3 +488,71 @@ def test_provider_video_get_web_url(mocker, app):
     video_arg = provider.last_video
     assert video_arg.identifier == "video1"
     assert video_arg.source == "fake"
+
+
+def test_provider_playlist_list_songs(mocker, app):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_playlist_list_songs("fake", "pl1", limit=1)
+
+    assert payload == ["ps1"]
+    playlist_arg = provider.last_playlist
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+
+
+def test_provider_album_list_songs(mocker, app):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_album_list_songs("fake", "al1", limit=1)
+
+    assert payload == ["as1"]
+    album_arg = provider.last_album
+    assert album_arg.identifier == "al1"
+    assert album_arg.source == "fake"
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("provider_artist_list_songs", "ars1"),
+        ("provider_artist_list_albums", "ara1"),
+        ("provider_artist_list_contributed_albums", "arc1"),
+    ],
+)
+def test_provider_artist_list_tools(mocker, app, tool_name, expected):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    tool = getattr(mcpserver, tool_name)
+    payload = tool("fake", "ar1", limit=1)
+
+    assert payload == [expected]
+    artist_arg = provider.last_artist
+    assert artist_arg.identifier == "ar1"
+    assert artist_arg.source == "fake"
+
+
+def test_provider_playlist_list_songs_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_playlist_list_songs("fake", "pl1") is None

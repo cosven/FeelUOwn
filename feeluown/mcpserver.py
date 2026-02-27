@@ -8,15 +8,23 @@ from feeluown.library import (
     resolve,
     reverse,
     SearchType,
+    BriefAlbumModel,
+    BriefArtistModel,
+    BriefPlaylistModel,
     BriefSongModel,
     BriefVideoModel,
 )
 from feeluown.library.provider_protocol import (
     SupportsAlbumGet,
+    SupportsAlbumSongsReader,
     SupportsArtistGet,
+    SupportsArtistAlbumsReader,
+    SupportsArtistContributedAlbumsReader,
+    SupportsArtistSongsReader,
     SupportsCurrentUser,
     SupportsCurrentUserListPlaylists,
     SupportsCurrentUserListRadioSongs,
+    SupportsPlaylistSongsReader,
     SupportsRecACollectionOfSongs,
     SupportsRecACollectionOfVideos,
     SupportsRecListCollections,
@@ -43,10 +51,15 @@ from feeluown.serializers import serialize
 mcp = FastMCP("FeelUOwn")
 _PROTOCOLS = (
     SupportsAlbumGet,
+    SupportsAlbumSongsReader,
     SupportsArtistGet,
+    SupportsArtistAlbumsReader,
+    SupportsArtistContributedAlbumsReader,
+    SupportsArtistSongsReader,
     SupportsCurrentUser,
     SupportsCurrentUserListPlaylists,
     SupportsCurrentUserListRadioSongs,
+    SupportsPlaylistSongsReader,
     SupportsRecACollectionOfSongs,
     SupportsRecACollectionOfVideos,
     SupportsRecListCollections,
@@ -152,6 +165,38 @@ def _provider_model_get(
     if model is None:
         return None
     return serialize("python", model)
+
+
+def _provider_model_list(
+    provider_id: str,
+    identifier: str,
+    protocol,
+    list_method_name: str,
+    model_builder,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, protocol):
+        return None
+    try:
+        model = model_builder(provider_id, identifier)
+        reader = getattr(provider, list_method_name)(model)
+        models = reader.readall() if hasattr(reader, "readall") else list(reader)
+    except Exception:
+        return None
+    return serialize("python", _limit_models(models, limit))
+
+
+def _build_brief_playlist(provider_id: str, playlist_id: str) -> BriefPlaylistModel:
+    return BriefPlaylistModel(identifier=playlist_id, source=provider_id)
+
+
+def _build_brief_album(provider_id: str, album_id: str) -> BriefAlbumModel:
+    return BriefAlbumModel(identifier=album_id, source=provider_id)
+
+
+def _build_brief_artist(provider_id: str, artist_id: str) -> BriefArtistModel:
+    return BriefArtistModel(identifier=artist_id, source=provider_id)
 
 
 def _build_brief_song(provider_id: str, song_id: str) -> BriefSongModel:
@@ -520,6 +565,101 @@ def provider_video_get_web_url(provider_id: str, video_id: str) -> str | None:
         return provider.video_get_web_url(_build_brief_video(provider_id, video_id))
     except Exception:
         return None
+
+
+@mcp.tool()
+def provider_playlist_list_songs(
+    provider_id: str,
+    playlist_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    List songs in a provider playlist.
+    """
+    return _provider_model_list(
+        provider_id,
+        playlist_id,
+        SupportsPlaylistSongsReader,
+        "playlist_create_songs_rd",
+        _build_brief_playlist,
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_album_list_songs(
+    provider_id: str,
+    album_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    List songs in a provider album.
+    """
+    return _provider_model_list(
+        provider_id,
+        album_id,
+        SupportsAlbumSongsReader,
+        "album_create_songs_rd",
+        _build_brief_album,
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_artist_list_songs(
+    provider_id: str,
+    artist_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    List songs for a provider artist.
+    """
+    return _provider_model_list(
+        provider_id,
+        artist_id,
+        SupportsArtistSongsReader,
+        "artist_create_songs_rd",
+        _build_brief_artist,
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_artist_list_albums(
+    provider_id: str,
+    artist_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    List albums for a provider artist.
+    """
+    return _provider_model_list(
+        provider_id,
+        artist_id,
+        SupportsArtistAlbumsReader,
+        "artist_create_albums_rd",
+        _build_brief_artist,
+        limit,
+    )
+
+
+@mcp.tool()
+def provider_artist_list_contributed_albums(
+    provider_id: str,
+    artist_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    List contributed albums for a provider artist.
+    """
+    return _provider_model_list(
+        provider_id,
+        artist_id,
+        SupportsArtistContributedAlbumsReader,
+        "artist_create_contributed_albums_rd",
+        _build_brief_artist,
+        limit,
+    )
 
 
 @mcp.tool()
