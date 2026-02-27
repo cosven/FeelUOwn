@@ -259,6 +259,17 @@ class PlaylistMutationProvider:
         return True
 
 
+class SongCommentsProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_song = None
+
+    def song_list_hot_comments(self, song):
+        self.last_song = song
+        return ["c1", "c2"]
+
+
 def test_nowplaying_resource(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
     mocker.patch("feeluown.mcpserver.serialize", return_value={"title": "demo"})
@@ -734,3 +745,28 @@ def test_provider_playlist_mutation_tools_unsupported(mocker, app):
     assert mcpserver.provider_playlist_delete("fake", "pl1") is None
     assert mcpserver.provider_playlist_add_song("fake", "pl1", "so1") is None
     assert mcpserver.provider_playlist_remove_song("fake", "pl1", "so1") is None
+
+
+def test_provider_song_list_hot_comments(mocker, app):
+    provider = SongCommentsProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_song_list_hot_comments("fake", "so1", limit=1)
+
+    assert payload == ["c1"]
+    song_arg = provider.last_song
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+
+def test_provider_song_list_hot_comments_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_song_list_hot_comments("fake", "so1") is None

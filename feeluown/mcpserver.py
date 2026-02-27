@@ -44,6 +44,7 @@ from feeluown.library.provider_protocol import (
     SupportsPlaylistAddSong,
     SupportsPlaylistRemoveSong,
     SupportsSongGet,
+    SupportsSongHotComments,
     SupportsSongMV,
     SupportsSongLyric,
     SupportsSongWebUrl,
@@ -84,6 +85,7 @@ _PROTOCOLS = (
     SupportsPlaylistAddSong,
     SupportsPlaylistRemoveSong,
     SupportsSongGet,
+    SupportsSongHotComments,
     SupportsSongMV,
     SupportsSongLyric,
     SupportsSongWebUrl,
@@ -581,6 +583,26 @@ def provider_song_list_similar(
     if songs is None:
         return None
     return serialize("python", _limit_models(songs, limit))
+
+
+@mcp.tool()
+def provider_song_list_hot_comments(
+    provider_id: str,
+    song_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]] | None:
+    provider = _provider_from_id(provider_id)
+    if provider is None or not isinstance(provider, SupportsSongHotComments):
+        return None
+    try:
+        comments = provider.song_list_hot_comments(
+            _build_brief_song(provider_id, song_id)
+        )
+    except Exception:
+        return None
+    if comments is None:
+        return None
+    return serialize("python", _limit_models(comments, limit))
 
 
 @mcp.tool()
