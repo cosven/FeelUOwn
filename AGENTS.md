@@ -132,3 +132,6 @@ Proposal:
   shared helpers when they are still used in multiple GUI paths.
 - For GUI-heavy changes, run focused GUI/library test sets first; if full Qt/mpv
   pytest is unstable in local environment, report it explicitly in PR notes.
+- When creating/updating PR descriptions via `gh`, prefer `--body-file` or GraphQL
+  `updatePullRequest` with a file-loaded body; avoid inline escaped `\n` strings
+  that may show up literally in the PR description.

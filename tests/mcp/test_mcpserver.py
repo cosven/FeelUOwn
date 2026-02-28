@@ -165,6 +165,111 @@ class VideoProvider:
         return "https://example.com/video"
 
 
+class ReaderProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_playlist = None
+        self.last_album = None
+        self.last_artist = None
+
+    def playlist_create_songs_rd(self, playlist):
+        self.last_playlist = playlist
+        return ["ps1", "ps2"]
+
+    def album_create_songs_rd(self, album):
+        self.last_album = album
+        return ["as1", "as2"]
+
+    def artist_create_songs_rd(self, artist):
+        self.last_artist = artist
+        return ["ars1", "ars2"]
+
+    def artist_create_albums_rd(self, artist):
+        self.last_artist = artist
+        return ["ara1", "ara2"]
+
+    def artist_create_contributed_albums_rd(self, artist):
+        self.last_artist = artist
+        return ["arc1", "arc2"]
+
+
+class CurrentUserProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_radio_count = None
+        self.user = SimpleNamespace(marker="user")
+
+    def has_current_user(self):
+        return True
+
+    def get_current_user(self):
+        return self.user
+
+    def get_current_user_or_none(self):
+        return self.user
+
+    def current_user_list_playlists(self):
+        return ["upl1", "upl2"]
+
+    def current_user_list_radio_songs(self, count):
+        self.last_radio_count = count
+        return ["urs1", "urs2"]
+
+    def current_user_fav_create_songs_rd(self):
+        return ["ufs1", "ufs2"]
+
+    def current_user_fav_create_albums_rd(self):
+        return ["ufa1", "ufa2"]
+
+    def current_user_fav_create_artists_rd(self):
+        return ["ufar1", "ufar2"]
+
+    def current_user_fav_create_playlists_rd(self):
+        return ["ufp1", "ufp2"]
+
+    def current_user_fav_create_videos_rd(self):
+        return ["ufv1", "ufv2"]
+
+
+class PlaylistMutationProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_create_name = None
+        self.last_delete_id = None
+        self.last_add_args = None
+        self.last_remove_args = None
+
+    def playlist_create_by_name(self, name):
+        self.last_create_name = name
+        return SimpleNamespace(marker="playlist-created")
+
+    def playlist_delete(self, playlist_id):
+        self.last_delete_id = playlist_id
+        return True
+
+    def playlist_add_song(self, playlist, song):
+        self.last_add_args = (playlist, song)
+        return True
+
+    def playlist_remove_song(self, playlist, song):
+        self.last_remove_args = (playlist, song)
+        return True
+
+
+class SongCommentsProvider:
+    identifier = "fake"
+
+    def __init__(self):
+        self.last_song = None
+
+    def song_list_hot_comments(self, song):
+        self.last_song = song
+        return ["c1", "c2"]
+
+
 def test_nowplaying_resource(mocker, app):
     mocker.patch("feeluown.mcpserver.get_app", return_value=app)
     mocker.patch("feeluown.mcpserver.serialize", return_value={"title": "demo"})
@@ -459,3 +564,209 @@ def test_provider_video_get_web_url(mocker, app):
     video_arg = provider.last_video
     assert video_arg.identifier == "video1"
     assert video_arg.source == "fake"
+
+
+def test_provider_playlist_list_songs(mocker, app):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_playlist_list_songs("fake", "pl1", limit=1)
+
+    assert payload == ["ps1"]
+    playlist_arg = provider.last_playlist
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+
+
+def test_provider_album_list_songs(mocker, app):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_album_list_songs("fake", "al1", limit=1)
+
+    assert payload == ["as1"]
+    album_arg = provider.last_album
+    assert album_arg.identifier == "al1"
+    assert album_arg.source == "fake"
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("provider_artist_list_songs", "ars1"),
+        ("provider_artist_list_albums", "ara1"),
+        ("provider_artist_list_contributed_albums", "arc1"),
+    ],
+)
+def test_provider_artist_list_tools(mocker, app, tool_name, expected):
+    provider = ReaderProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    tool = getattr(mcpserver, tool_name)
+    payload = tool("fake", "ar1", limit=1)
+
+    assert payload == [expected]
+    artist_arg = provider.last_artist
+    assert artist_arg.identifier == "ar1"
+    assert artist_arg.source == "fake"
+
+
+def test_provider_playlist_list_songs_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_playlist_list_songs("fake", "pl1") is None
+
+
+def test_provider_current_user_get(mocker, app):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, obj: {"marker": obj.marker},
+    )
+
+    payload = mcpserver.provider_current_user_get("fake")
+
+    assert payload == {"marker": "user"}
+
+
+def test_provider_current_user_list_tools(mocker, app):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_current_user_list_playlists("fake", limit=1)
+    assert payload == ["upl1"]
+
+    payload = mcpserver.provider_current_user_list_radio_songs(
+        "fake",
+        count=3,
+        limit=1,
+    )
+    assert payload == ["urs1"]
+    assert provider.last_radio_count == 3
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("provider_current_user_fav_list_songs", "ufs1"),
+        ("provider_current_user_fav_list_albums", "ufa1"),
+        ("provider_current_user_fav_list_artists", "ufar1"),
+        ("provider_current_user_fav_list_playlists", "ufp1"),
+        ("provider_current_user_fav_list_videos", "ufv1"),
+    ],
+)
+def test_provider_current_user_fav_list_tools(mocker, app, tool_name, expected):
+    provider = CurrentUserProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    tool = getattr(mcpserver, tool_name)
+    payload = tool("fake", limit=1)
+
+    assert payload == [expected]
+
+
+def test_provider_current_user_get_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_current_user_get("fake") is None
+
+
+def test_provider_playlist_mutation_tools(mocker, app):
+    provider = PlaylistMutationProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, obj: {"marker": obj.marker},
+    )
+
+    payload = mcpserver.provider_playlist_create_by_name("fake", "my-list")
+    assert payload == {"marker": "playlist-created"}
+    assert provider.last_create_name == "my-list"
+
+    payload = mcpserver.provider_playlist_delete("fake", "pl1")
+    assert payload is True
+    assert provider.last_delete_id == "pl1"
+
+    payload = mcpserver.provider_playlist_add_song("fake", "pl1", "so1")
+    assert payload is True
+    playlist_arg, song_arg = provider.last_add_args
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+    payload = mcpserver.provider_playlist_remove_song("fake", "pl1", "so1")
+    assert payload is True
+    playlist_arg, song_arg = provider.last_remove_args
+    assert playlist_arg.identifier == "pl1"
+    assert playlist_arg.source == "fake"
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+
+def test_provider_playlist_mutation_tools_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_playlist_create_by_name("fake", "n") is None
+    assert mcpserver.provider_playlist_delete("fake", "pl1") is None
+    assert mcpserver.provider_playlist_add_song("fake", "pl1", "so1") is None
+    assert mcpserver.provider_playlist_remove_song("fake", "pl1", "so1") is None
+
+
+def test_provider_song_list_hot_comments(mocker, app):
+    provider = SongCommentsProvider()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+    mocker.patch(
+        "feeluown.mcpserver.serialize",
+        side_effect=lambda _, items: list(items),
+    )
+
+    payload = mcpserver.provider_song_list_hot_comments("fake", "so1", limit=1)
+
+    assert payload == ["c1"]
+    song_arg = provider.last_song
+    assert song_arg.identifier == "so1"
+    assert song_arg.source == "fake"
+
+
+def test_provider_song_list_hot_comments_unsupported(mocker, app):
+    provider = ProviderWithoutGets()
+    app.library.get.return_value = provider
+    mocker.patch("feeluown.mcpserver.get_app", return_value=app)
+
+    assert mcpserver.provider_song_list_hot_comments("fake", "so1") is None
