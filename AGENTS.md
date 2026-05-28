@@ -69,6 +69,13 @@ Practical conventions:
 - For Qt widgets, prefer a `setup_ui` style split when code grows.
 - Handle provider/network exceptions defensively in GUI flows.
 
+AI coding style:
+- Names must match semantics. Class, function, and variable names should make
+  their purpose and layer boundary clear at the call site.
+- Important classes/functions should have concise English docstrings or comments
+  that explain intent and non-obvious behavior. Do not add comments that merely
+  restate the code.
+
 ## 5) GUI Architecture Rules
 
 Layering rules for GUI code:
