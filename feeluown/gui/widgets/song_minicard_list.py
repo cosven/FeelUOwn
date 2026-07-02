@@ -70,6 +70,9 @@ class BaseSongMiniCardListModel(QAbstractListModel):
         # TODO: duplicate code with ImgListModel
         def cb(content):
             uri = reverse(item)
+            if item not in self._items:
+                self._image_fetching.discard(uri)
+                return
             if content is None:
                 self._image_fetching.discard(uri)
                 self.image_cache.set(uri, None)

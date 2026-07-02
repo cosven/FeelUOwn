@@ -49,23 +49,56 @@ class PlayerPlaylistModel(SongMiniCardListModel):
         return flags
 
     def on_songs_added(self, index, count):
-        self.beginInsertRows(QModelIndex(), index, index + count - 1)
-        # Insert from tail to front.
-        while count > 0:
-            self._items.insert(index, self._playlist[index + count - 1])
-            count -= 1
+        if count <= 0 or index > len(self._items):
+            return
+
+        songs = list(self._playlist.list()[index : index + count])
+        if not songs:
+            return
+
+        self.beginInsertRows(QModelIndex(), index, index + len(songs) - 1)
+        self._items[index:index] = songs
         self.endInsertRows()
 
     def on_songs_removed(self, index, count):
-        self.beginRemoveRows(QModelIndex(), index, index + count - 1)
-        while count > 0:
-            self._items.pop(index + count - 1)
-            count -= 1
+        if count <= 0 or index >= len(self._items):
+            return
+
+        remove_count = min(count, len(self._items) - index)
+        last = index + remove_count - 1
+        self.beginRemoveRows(QModelIndex(), index, last)
+        del self._items[index : last + 1]
         self.endRemoveRows()
 
     def on_songs_reordered(self, index, count):
-        self.on_songs_removed(index, count)
-        self.on_songs_added(index, count)
+        loaded_count = len(self._items)
+        if loaded_count <= 0:
+            return
+
+        self.beginRemoveRows(QModelIndex(), 0, loaded_count - 1)
+        self._items.clear()
+        self.endRemoveRows()
+
+        songs = list(self._playlist.list()[:loaded_count])
+        if not songs:
+            return
+
+        self.beginInsertRows(QModelIndex(), 0, len(songs) - 1)
+        self._items.extend(songs)
+        self.endInsertRows()
+
+    def can_fetch_more(self, _=None):
+        return len(self._items) < len(self._playlist.list())
+
+    def fetch_more_impl(self):
+        begin = self.rowCount()
+        end = begin + self._fetch_more_step
+        items = list(self._playlist.list()[begin:end])
+        self._is_fetching = False
+        if not items:
+            self.no_more_item.emit()
+            return
+        self.on_items_fetched(items)
 
 
 class FMCandidatePlaylistDelegate(SongMiniCardListDelegate):
