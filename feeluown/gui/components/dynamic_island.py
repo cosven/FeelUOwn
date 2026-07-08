@@ -67,9 +67,10 @@ class DynamicIslandStatusBar(QWidget):
     Uses system palette colors and reuses existing components.
     """
 
-    def __init__(self, app: "GuiApp", parent=None):
+    def __init__(self, app: "GuiApp", parent=None, trailing_widget=None):
         super().__init__(parent=parent)
         self._app = app
+        self._trailing_widget = trailing_widget
 
         # Hover and animation state
         self._hovered = False
@@ -79,6 +80,7 @@ class DynamicIslandStatusBar(QWidget):
         self._anim_to = 0  # target width
         self._anim_current = 0  # current animated width
         self._has_song = False
+        self._visibility_suppressed = False
         self._compact_text = ""
         self._position = _number_or_zero(self._app.player.position)
         self._duration = _number_or_zero(self._app.player.duration)
@@ -151,6 +153,14 @@ class DynamicIslandStatusBar(QWidget):
         )
         self._layout.addWidget(self._song_label, 1)
         self._layout.addWidget(self._control_widget)
+        if self._trailing_widget is not None:
+            self._trailing_widget.setParent(self)
+            self._layout.addWidget(
+                self._trailing_widget,
+                0,
+                Qt.AlignmentFlag.AlignVCenter,
+            )
+            self._trailing_widget.hide()
         self.setFixedWidth(self._calc_compact_width())
 
     def _connect_signals(self):
@@ -186,6 +196,13 @@ class DynamicIslandStatusBar(QWidget):
         )
 
     # ---- public methods ----
+
+    def set_visibility_suppressed(self, suppressed):
+        self._visibility_suppressed = suppressed
+        if suppressed:
+            self.hide()
+        else:
+            self._sync_current_state()
 
     # ---- protected slots ----
 
@@ -230,7 +247,7 @@ class DynamicIslandStatusBar(QWidget):
 
         state = self._app.player.state
         if state != State.stopped:
-            self.show()
+            self._show_if_allowed()
         if state == State.paused:
             self._start_expand()
         elif state == State.playing and not self._hovered:
@@ -242,11 +259,11 @@ class DynamicIslandStatusBar(QWidget):
             self.hide()
         elif state == State.paused:
             if self._has_song:
-                self.show()
+                self._show_if_allowed()
             self._start_expand()
         elif state == State.playing:
             if self._has_song:
-                self.show()
+                self._show_if_allowed()
             if not self._hovered:
                 self._start_compact()
 
@@ -348,15 +365,28 @@ class DynamicIslandStatusBar(QWidget):
         return max(
             60,
             (
-                EXPANDED_WIDTH - PADDING_LEFT - PADDING_RIGHT -
+                COMPACT_MAX_WIDTH - PADDING_LEFT - PADDING_RIGHT -
                 COVER_COMPACT - CONTENT_SPACING
             ),
         )
+
+    def _trailing_width(self):
+        widget = self._trailing_widget
+        if widget is None:
+            return 0
+        return CONTENT_SPACING + max(widget.width(), widget.sizeHint().width())
+
+    def _expanded_width(self):
+        return EXPANDED_WIDTH + self._trailing_width()
 
     def _playback_progress(self):
         if not self._duration:
             return 0
         return max(0.0, min(1.0, self._position / self._duration))
+
+    def _show_if_allowed(self):
+        if not self._visibility_suppressed:
+            self.show()
 
     def _draw_progress_background(self, painter, rect, radius, palette):
         progress = self._playback_progress()
@@ -437,7 +467,7 @@ class DynamicIslandStatusBar(QWidget):
             return  # already expanding
 
         self._anim_from = self.width()
-        self._anim_to = EXPANDED_WIDTH
+        self._anim_to = self._expanded_width()
         self._anim_current = self._anim_from
         self._animating = True
         if not self._anim_timer.isActive():
@@ -495,6 +525,8 @@ class DynamicIslandStatusBar(QWidget):
         self._lyric_label.hide()
         self._song_label.show()
         self._control_widget.show()
+        if self._trailing_widget is not None:
+            self._trailing_widget.show()
         self._cover.setFixedSize(COVER_EXPANDED, COVER_EXPANDED)
         self._expansion_state = "expanded"
 
@@ -505,6 +537,8 @@ class DynamicIslandStatusBar(QWidget):
         self._lyric_label.show()
         self._song_label.hide()
         self._control_widget.hide()
+        if self._trailing_widget is not None:
+            self._trailing_widget.hide()
         self._cover.setFixedSize(COVER_COMPACT, COVER_COMPACT)
         self._expansion_state = "compact"
         self._set_compact_text(
@@ -513,9 +547,9 @@ class DynamicIslandStatusBar(QWidget):
 
     def _finalize_state(self):
         """Finalize the state after animation completes."""
-        if self._anim_to == EXPANDED_WIDTH:
+        if self._anim_to == self._expanded_width():
             self._switch_to_expanded()
-            self.setFixedWidth(EXPANDED_WIDTH)
+            self.setFixedWidth(self._expanded_width())
         else:
             self._switch_to_compact()
             self.setFixedWidth(self._calc_compact_width())

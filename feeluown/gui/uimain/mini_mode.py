@@ -6,19 +6,84 @@ from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractButton,
     QAbstractSlider,
+    QFrame,
     QMenu,
+    QPlainTextEdit,
+    QScrollArea,
+    QSizePolicy,
+    QTextBrowser,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from feeluown.gui.components.dynamic_island import DynamicIslandStatusBar
 from feeluown.gui.helpers import IS_MACOS
+from feeluown.gui.uimain.ai_chat import AIChatBox
+from feeluown.gui.widgets.ai_chat import draw_round_surface
+from feeluown.gui.widgets.selfpaint_btn import AIIconButton
 from feeluown.i18n import t
 
 if TYPE_CHECKING:
     from feeluown.app.gui_app import GuiApp
 
 logger = logging.getLogger(__name__)
+
+
+class MiniAIChatPanel(QFrame):
+    """Compact AI chat panel used inside mini mode."""
+
+    collapse_requested = pyqtSignal()
+
+    def __init__(self, app: "GuiApp", parent=None):
+        super().__init__(parent=parent)
+        self._app = app
+
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFixedWidth(340)
+        self.setAutoFillBackground(False)
+
+        self._ai_btn = AIIconButton(
+            length=24,
+            padding=0.22,
+            colorful=True,
+            parent=self,
+        )
+        self._ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ai_btn.clicked.connect(self.collapse_requested.emit)
+        self.island = DynamicIslandStatusBar(
+            app,
+            parent=self,
+            trailing_widget=self._ai_btn,
+        )
+        self.chat_box = AIChatBox(
+            app,
+            self,
+            status_widget=self.island,
+            history_fixed_height=160,
+            input_editor_min_height=34,
+            input_editor_max_height=76,
+            input_contents_margins=(10, 8, 8, 5),
+            placeholder_text=t("mini-ai-chat-input-placeholder"),
+        )
+        self.history_widget = self.chat_box.history_widget
+        self.input_widget = self.chat_box.input_widget
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        layout.addWidget(self.chat_box)
+
+    def focus_input(self):
+        self.input_widget.focus_editor()
+
+    async def exec_user_query(self, query: str):
+        await self.chat_box.exec_user_query(query)
+
+    def paintEvent(self, event):
+        draw_round_surface(self)
+        super().paintEvent(event)
 
 
 class MiniModeWindow(QWidget):
@@ -49,27 +114,42 @@ class MiniModeWindow(QWidget):
         self.setAutoFillBackground(False)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        self.island = DynamicIslandStatusBar(app, parent=self)
-        self.island.installEventFilter(self)
-        for child in self.island.findChildren(QWidget):
-            child.installEventFilter(self)
+        self._ai_btn = AIIconButton(
+            length=24,
+            padding=0.22,
+            colorful=True,
+            parent=self,
+        )
+        self._ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._chat_panel = None
+        if self._app.ai is None:
+            self._ai_btn.setDisabled(True)
+            self._ai_btn.setToolTip(t("ai-configure-tooltip"))
+        else:
+            self._ai_btn.clicked.connect(self._toggle_ai_chat_panel)
+        self.island = DynamicIslandStatusBar(
+            app,
+            parent=self,
+            trailing_widget=self._ai_btn,
+        )
+        self._install_event_filters(self.island)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.island)
+        layout.setSpacing(8)
+        layout.addWidget(self.island, 0, Qt.AlignmentFlag.AlignHCenter)
 
         QShortcut(QKeySequence.StandardKey.Cancel, self).activated.connect(
-            self.exit_requested.emit
+            self._on_cancel_requested
         )
 
     def showEvent(self, event):
-        self._resize_to_island()
+        self._resize_to_content()
         self.island.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
         super().showEvent(event)
 
     def resizeEvent(self, event):
-        self._resize_to_island()
+        self._resize_to_content()
         super().resizeEvent(event)
 
     def mousePressEvent(self, event):
@@ -96,6 +176,8 @@ class MiniModeWindow(QWidget):
 
     def eventFilter(self, obj, event):
         if isinstance(obj, QWidget) and event.type() == QEvent.Type.ContextMenu:
+            if self._is_chat_panel_child(obj):
+                return False
             self._show_context_menu(event.globalPos())
             return True
         if isinstance(obj, QWidget) and event.type() in (
@@ -109,8 +191,42 @@ class MiniModeWindow(QWidget):
             QEvent.Type.Show,
             QEvent.Type.Hide,
         ):
-            self._resize_to_island()
+            self._resize_to_content()
         return super().eventFilter(obj, event)
+
+    def _toggle_ai_chat_panel(self):
+        if self._chat_panel is not None and self._chat_panel.isVisible():
+            self._hide_ai_chat_panel()
+        else:
+            self._show_ai_chat_panel()
+
+    def _show_ai_chat_panel(self):
+        if self._chat_panel is None:
+            self._chat_panel = MiniAIChatPanel(self._app, self)
+            self._chat_panel.collapse_requested.connect(self._hide_ai_chat_panel)
+            self._install_event_filters(self._chat_panel)
+            self.layout().addWidget(
+                self._chat_panel,
+                0,
+                Qt.AlignmentFlag.AlignHCenter,
+            )
+        self.island.set_visibility_suppressed(True)
+        self._chat_panel.show()
+        self._chat_panel.focus_input()
+        self._resize_to_content()
+
+    def _hide_ai_chat_panel(self):
+        if self._chat_panel is not None:
+            self._chat_panel.hide()
+        self.island.set_visibility_suppressed(False)
+        self._resize_to_content()
+        self.island.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+
+    def _on_cancel_requested(self):
+        if self._chat_panel is not None and self._chat_panel.isVisible():
+            self._hide_ai_chat_panel()
+        else:
+            self.exit_requested.emit()
 
     def _show_context_menu(self, global_pos):
         menu = QMenu(self)
@@ -165,17 +281,63 @@ class MiniModeWindow(QWidget):
             return False
 
     def _is_interactive_drag_source(self, obj):
-        if isinstance(obj, (QAbstractButton, QAbstractSlider)):
+        if self._is_chat_panel_child(obj):
+            return True
+        if isinstance(
+            obj,
+            (
+                QAbstractButton,
+                QAbstractSlider,
+                QPlainTextEdit,
+                QTextBrowser,
+                QTextEdit,
+                QScrollArea,
+            ),
+        ):
             return True
         parent = obj.parent() if isinstance(obj, QWidget) else None
         while isinstance(parent, QWidget):
-            if isinstance(parent, (QAbstractButton, QAbstractSlider)):
+            if isinstance(
+                parent,
+                (
+                    QAbstractButton,
+                    QAbstractSlider,
+                    QPlainTextEdit,
+                    QTextBrowser,
+                    QTextEdit,
+                    QScrollArea,
+                ),
+            ):
                 return True
             parent = parent.parent()
         return False
 
+    def _install_event_filters(self, widget):
+        widget.installEventFilter(self)
+        for child in widget.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def _is_chat_panel_child(self, obj):
+        panel = self._chat_panel
+        if panel is None or not isinstance(obj, QWidget):
+            return False
+        if obj is panel:
+            return True
+        parent = obj.parent()
+        while isinstance(parent, QWidget):
+            if parent is panel:
+                return True
+            parent = parent.parent()
+        return False
+
+    def _resize_to_content(self):
+        self.layout().activate()
+        size = self.sizeHint()
+        if size.isValid() and self.size() != size:
+            self.setFixedSize(size)
+
     def _resize_to_island(self):
-        self.setFixedSize(self.island.size())
+        self._resize_to_content()
 
 
 class MiniModeManager(QObject):

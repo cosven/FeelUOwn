@@ -40,7 +40,11 @@ from feeluown.gui.components.dynamic_island import (
     EXPANDED_WIDTH,
     VOLUME_STEP,
 )
-from feeluown.gui.uimain.mini_mode import MiniModeManager, MiniModeWindow
+from feeluown.gui.uimain.mini_mode import (
+    MiniAIChatPanel,
+    MiniModeManager,
+    MiniModeWindow,
+)
 from feeluown.gui.uimain.lyric import LyricWindow
 from feeluown.gui.uimain.playlist_overlay import PlaylistOverlay
 from feeluown.gui.widgets.ai_chat import (
@@ -54,6 +58,7 @@ from feeluown.gui.widgets.ai_chat import (
     surface_border_color,
 )
 from feeluown.gui.widgets import PlayButton, PlusButton
+from feeluown.gui.widgets.selfpaint_btn import AIIconButton
 from feeluown.gui.widgets.song_minicard_list import SongMiniCardListDelegate
 from feeluown.gui.widgets.textbtn import TextButton
 
@@ -1055,6 +1060,11 @@ def test_mini_mode_window_is_frameless_and_uses_island(qtbot, app_mock):
     margins = window.layout().contentsMargins()
 
     assert isinstance(window.island, DynamicIslandStatusBar)
+    assert isinstance(window._ai_btn, AIIconButton)
+    assert window._ai_btn.parent() is window.island
+    assert window._ai_btn.width() == window._ai_btn.height()
+    assert window._ai_btn.ai_icon.colorful
+    assert window._ai_btn.isHidden()
     assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
     assert window.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
     assert window.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -1062,6 +1072,56 @@ def test_mini_mode_window_is_frameless_and_uses_island(qtbot, app_mock):
     assert margins.top() == 0
     assert margins.right() == 0
     assert margins.bottom() == 0
+
+
+def test_mini_mode_window_disables_ai_button_without_ai(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = None
+    window = MiniModeWindow(app_mock)
+    qtbot.addWidget(window)
+
+    assert not window._ai_btn.isEnabled()
+    assert window._chat_panel is None
+
+
+def test_mini_mode_window_toggles_compact_ai_panel(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.player.current_metadata = {
+        "title": "Song",
+        "artists": ["Mary"],
+        "artwork": "",
+        "source": "fake",
+    }
+    app_mock.ai = FakeAI()
+    window = MiniModeWindow(app_mock)
+    qtbot.addWidget(window)
+    window.show()
+    assert window._ai_btn.isHidden()
+    window.island._start_expand()
+    while window.island._animating:
+        window.island._tick_animation()
+    window._resize_to_content()
+    compact_size = window.size()
+
+    assert not window._ai_btn.isHidden()
+    window._ai_btn.click()
+
+    assert isinstance(window._chat_panel, MiniAIChatPanel)
+    assert window._chat_panel.isVisibleTo(window)
+    assert window.island.isHidden()
+    assert window._chat_panel.island.parent() is window._chat_panel.input_widget
+    assert window.width() >= window._chat_panel.width()
+    assert window.height() > compact_size.height()
+
+    window.island._on_player_state_changed(State.playing)
+
+    assert window.island.isHidden()
+
+    window._chat_panel._ai_btn.click()
+
+    assert not window._chat_panel.isVisible()
+    assert not window.island.isHidden()
+    assert window.height() == compact_size.height()
 
 
 def test_mini_mode_window_drags_from_island_body(qtbot, app_mock, monkeypatch):
@@ -1134,6 +1194,27 @@ def test_mini_mode_window_does_not_drag_from_controls(qtbot, app_mock):
     assert window.pos() == QPoint(100, 120)
 
 
+def test_mini_mode_window_does_not_drag_from_chat_input(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = FakeAI()
+    window = MiniModeWindow(app_mock)
+    qtbot.addWidget(window)
+    window.move(100, 120)
+    window._toggle_ai_chat_panel()
+    editor = window._chat_panel.input_widget._editor
+
+    window._handle_drag_event(
+        editor,
+        _FakeMouseEvent(QEvent.Type.MouseButtonPress, QPointF(10, 10)),
+    )
+    window._handle_drag_event(
+        editor,
+        _FakeMouseEvent(QEvent.Type.MouseMove, QPointF(25, 28)),
+    )
+
+    assert window.pos() == QPoint(100, 120)
+
+
 def test_mini_mode_window_intercepts_child_context_menu(
     qtbot, app_mock, monkeypatch
 ):
@@ -1150,6 +1231,28 @@ def test_mini_mode_window_intercepts_child_context_menu(
 
     assert handled
     assert positions == [QPoint(20, 30)]
+
+
+def test_mini_ai_chat_panel_renders_streaming_response(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = FakeAI(FakeStreamingCopilot())
+    panel = MiniAIChatPanel(app_mock)
+    qtbot.addWidget(panel)
+
+    asyncio.run(panel.exec_user_query("推荐几首华语经典歌曲"))
+
+    history_text = "\n".join(
+        label.toPlainText() for label in panel.history_widget.findChildren(
+            RoundedLabel
+        )
+    )
+    tool_events = panel.history_widget.findChildren(ChatToolEventCard)
+    assert "推荐几首华语经典歌曲" in history_text
+    assert "我为您推荐了这些歌曲" in history_text
+    assert "我来" not in history_text
+    assert len(tool_events) == 1
+    assert "create_song_suggestions_artifact" in tool_events[0].text()
+    assert panel.input_widget._editor.minimumHeight() == 34
 
 
 def test_mini_mode_manager_hides_and_restores_main_window(qtbot, app_mock):
