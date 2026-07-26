@@ -1190,7 +1190,9 @@ def test_mini_mode_window_prefers_system_move(qtbot, app_mock, monkeypatch):
     assert not window._using_system_move
 
 
-def test_mini_mode_window_resizes_from_right_edge(qtbot, app_mock, monkeypatch):
+def test_mini_mode_window_resizes_from_bottom_right_corner(
+    qtbot, app_mock, monkeypatch
+):
     _prepare_dynamic_island_app(app_mock)
     app_mock.ai = FakeAI()
     window = MiniModeWindow(app_mock)
@@ -1200,8 +1202,11 @@ def test_mini_mode_window_resizes_from_right_edge(qtbot, app_mock, monkeypatch):
     monkeypatch.setattr(window, "_start_system_resize", lambda _edges: False)
 
     start_geometry = window.frameGeometry()
-    start_pos = QPointF(start_geometry.right(), start_geometry.center().y())
-    moved_pos = QPointF(start_geometry.right() + 40, start_geometry.center().y())
+    start_pos = QPointF(start_geometry.right(), start_geometry.bottom())
+    moved_pos = QPointF(
+        start_geometry.right() + 40,
+        start_geometry.bottom() + 20,
+    )
 
     assert window._handle_resize_event(
         window,
@@ -1217,6 +1222,43 @@ def test_mini_mode_window_resizes_from_right_edge(qtbot, app_mock, monkeypatch):
     )
 
     assert window.width() == start_geometry.width() + 40
+    assert window.height() == start_geometry.height() + 20
+
+
+def test_mini_mode_window_moves_from_edge_middle(qtbot, app_mock, monkeypatch):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = FakeAI()
+    window = MiniModeWindow(app_mock)
+    qtbot.addWidget(window)
+    window.show()
+    window._toggle_ai_chat_panel()
+    monkeypatch.setattr(window, "_start_system_move", lambda: False)
+
+    start_geometry = window.frameGeometry()
+    edge_pos = QPointF(start_geometry.right(), start_geometry.center().y())
+    moved_pos = QPointF(edge_pos.x() + 40, edge_pos.y() + 20)
+
+    assert not window._handle_resize_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseButtonPress, edge_pos),
+    )
+    assert window._handle_drag_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseButtonPress, edge_pos),
+    )
+    assert window._handle_drag_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseMove, moved_pos),
+    )
+    assert window._handle_drag_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseButtonRelease, moved_pos),
+    )
+
+    assert window.pos() == QPoint(
+        start_geometry.x() + 40,
+        start_geometry.y() + 20,
+    )
 
 
 def test_mini_mode_window_does_not_drag_from_controls(qtbot, app_mock):

@@ -267,7 +267,16 @@ class MiniModeWindow(QWidget):
         menu.exec(global_pos)
 
     def _handle_drag_event(self, obj, event):
-        if self._is_interactive_drag_source(obj):
+        drag_active = (
+            self._drag_global_pos is not None or self._using_system_move
+        )
+        if self._is_interactive_drag_source(obj) and not (
+            drag_active
+            or (
+                self.isVisible()
+                and self._is_window_side(event.globalPosition().toPoint())
+            )
+        ):
             self._drag_global_pos = None
             self._using_system_move = False
             return False
@@ -316,7 +325,7 @@ class MiniModeWindow(QWidget):
                 return True
             edges = self._resize_edges_at(global_pos)
             if edges is not None:
-                self.setCursor(Qt.CursorShape.SizeHorCursor)
+                self.setCursor(self._resize_cursor(edges))
             else:
                 self.unsetCursor()
             return False
@@ -346,11 +355,36 @@ class MiniModeWindow(QWidget):
 
     def _resize_edges_at(self, global_pos):
         geometry = self.frameGeometry()
-        if global_pos.x() <= geometry.left() + RESIZE_MARGIN:
-            return Qt.Edge.LeftEdge
-        if global_pos.x() >= geometry.right() - RESIZE_MARGIN:
-            return Qt.Edge.RightEdge
+        left = global_pos.x() <= geometry.left() + RESIZE_MARGIN
+        right = global_pos.x() >= geometry.right() - RESIZE_MARGIN
+        top = global_pos.y() <= geometry.top() + RESIZE_MARGIN
+        bottom = global_pos.y() >= geometry.bottom() - RESIZE_MARGIN
+        if left and top:
+            return Qt.Edge.LeftEdge | Qt.Edge.TopEdge
+        if right and top:
+            return Qt.Edge.RightEdge | Qt.Edge.TopEdge
+        if left and bottom:
+            return Qt.Edge.LeftEdge | Qt.Edge.BottomEdge
+        if right and bottom:
+            return Qt.Edge.RightEdge | Qt.Edge.BottomEdge
         return None
+
+    def _resize_cursor(self, edges):
+        if edges in (
+            Qt.Edge.LeftEdge | Qt.Edge.TopEdge,
+            Qt.Edge.RightEdge | Qt.Edge.BottomEdge,
+        ):
+            return Qt.CursorShape.SizeFDiagCursor
+        return Qt.CursorShape.SizeBDiagCursor
+
+    def _is_window_side(self, global_pos):
+        geometry = self.frameGeometry()
+        return (
+            global_pos.x() <= geometry.left() + RESIZE_MARGIN
+            or global_pos.x() >= geometry.right() - RESIZE_MARGIN
+            or global_pos.y() <= geometry.top() + RESIZE_MARGIN
+            or global_pos.y() >= geometry.bottom() - RESIZE_MARGIN
+        )
 
     def _resize_manually(self, global_pos):
         start_geometry = self._resize_start_geometry
@@ -360,19 +394,31 @@ class MiniModeWindow(QWidget):
 
         delta_x = global_pos.x() - start_pos.x()
         width = start_geometry.width()
-        if self._resize_edges == Qt.Edge.LeftEdge:
+        height = start_geometry.height()
+        if self._resize_edges & Qt.Edge.LeftEdge:
             width -= delta_x
-        else:
+        elif self._resize_edges & Qt.Edge.RightEdge:
             width += delta_x
+        if self._resize_edges & Qt.Edge.TopEdge:
+            height -= global_pos.y() - start_pos.y()
+        elif self._resize_edges & Qt.Edge.BottomEdge:
+            height += global_pos.y() - start_pos.y()
 
         width = max(self.minimumWidth(), width)
         if self.maximumWidth() < 16777215:
             width = min(self.maximumWidth(), width)
-        if self._resize_edges == Qt.Edge.LeftEdge:
+        height = max(self.minimumHeight(), height)
+        if self.maximumHeight() < 16777215:
+            height = min(self.maximumHeight(), height)
+        if self._resize_edges & Qt.Edge.LeftEdge:
             x = start_geometry.right() - width + 1
         else:
             x = start_geometry.x()
-        self.setGeometry(x, start_geometry.y(), width, self.height())
+        if self._resize_edges & Qt.Edge.TopEdge:
+            y = start_geometry.bottom() - height + 1
+        else:
+            y = start_geometry.y()
+        self.setGeometry(x, y, width, height)
 
     def _start_system_move(self):
         handle = self.windowHandle()
@@ -443,7 +489,11 @@ class MiniModeWindow(QWidget):
         return False
 
     def _resize_to_content(self):
-        if self._resizing_to_content:
+        if (
+            self._resizing_to_content
+            or self._using_system_resize
+            or self._resize_start_geometry is not None
+        ):
             return
         self._resizing_to_content = True
         try:
