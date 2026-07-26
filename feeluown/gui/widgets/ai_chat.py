@@ -712,6 +712,28 @@ class ChatInputWidget(QWidget):
             footer_layout.addWidget(self._msg_label, 1)
         footer_layout.addWidget(self._send_btn, 0, Qt.AlignmentFlag.AlignRight)
         layout.addLayout(footer_layout)
+        self._footer_layout = footer_layout
+        QTimer.singleShot(0, self._update_status_widget_width)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_status_widget_width()
+
+    def _update_status_widget_width(self):
+        status_widget = self._status_widget
+        if status_widget is None or not hasattr(
+            status_widget, "set_available_width"
+        ):
+            return
+        footer_width = self._footer_layout.geometry().width()
+        if footer_width <= 0:
+            return
+        available_width = (
+            footer_width
+            - self._send_btn.sizeHint().width()
+            - self._footer_layout.spacing()
+        )
+        status_widget.set_available_width(max(1, available_width))
 
     def paintEvent(self, event):
         draw_round_surface(self, self._radius)

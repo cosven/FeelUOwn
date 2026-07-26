@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MINI_CHAT_DEFAULT_WIDTH = 340
+MINI_CHAT_MIN_WIDTH = 280
+RESIZE_MARGIN = 8
+
 
 class MiniAIChatPanel(QFrame):
     """Compact AI chat panel used inside mini mode."""
@@ -40,8 +44,11 @@ class MiniAIChatPanel(QFrame):
         self._app = app
 
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.setFixedWidth(340)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        self.setMinimumWidth(MINI_CHAT_MIN_WIDTH)
         self.setAutoFillBackground(False)
 
         self._ai_btn = AIIconButton(
@@ -73,7 +80,7 @@ class MiniAIChatPanel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        layout.addWidget(self.chat_box)
+        layout.addWidget(self.chat_box, 1)
 
     def focus_input(self):
         self.input_widget.focus_editor()
@@ -96,6 +103,13 @@ class MiniModeWindow(QWidget):
         self._app = app
         self._drag_global_pos = None
         self._using_system_move = False
+        self._resize_global_pos = None
+        self._resize_start_geometry = None
+        self._resize_edges = None
+        self._using_system_resize = False
+        self._chat_width = None
+        self._chat_mode = False
+        self._resizing_to_content = False
 
         if IS_MACOS:
             flags = (
@@ -153,18 +167,27 @@ class MiniModeWindow(QWidget):
         super().resizeEvent(event)
 
     def mousePressEvent(self, event):
+        if self._handle_resize_event(self, event):
+            event.accept()
+            return
         if self._handle_drag_event(self, event):
             event.accept()
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        if self._handle_resize_event(self, event):
+            event.accept()
+            return
         if self._handle_drag_event(self, event):
             event.accept()
             return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self._handle_resize_event(self, event):
+            event.accept()
+            return
         if self._handle_drag_event(self, event):
             event.accept()
             return
@@ -185,6 +208,8 @@ class MiniModeWindow(QWidget):
             QEvent.Type.MouseMove,
             QEvent.Type.MouseButtonRelease,
         ):
+            if self._handle_resize_event(obj, event):
+                return True
             return self._handle_drag_event(obj, event)
         elif obj is self.island and event.type() in (
             QEvent.Type.Resize,
@@ -195,12 +220,13 @@ class MiniModeWindow(QWidget):
         return super().eventFilter(obj, event)
 
     def _toggle_ai_chat_panel(self):
-        if self._chat_panel is not None and self._chat_panel.isVisible():
+        if self._chat_mode:
             self._hide_ai_chat_panel()
         else:
             self._show_ai_chat_panel()
 
     def _show_ai_chat_panel(self):
+        self._chat_mode = True
         if self._chat_panel is None:
             self._chat_panel = MiniAIChatPanel(self._app, self)
             self._chat_panel.collapse_requested.connect(self._hide_ai_chat_panel)
@@ -208,22 +234,28 @@ class MiniModeWindow(QWidget):
             self.layout().addWidget(
                 self._chat_panel,
                 0,
-                Qt.AlignmentFlag.AlignHCenter,
             )
         self.island.set_visibility_suppressed(True)
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
         self._chat_panel.show()
         self._chat_panel.focus_input()
+        if self._chat_width is None:
+            self._chat_width = max(MINI_CHAT_DEFAULT_WIDTH, self.width())
+        self.resize(self._chat_width, self.height())
         self._resize_to_content()
 
     def _hide_ai_chat_panel(self):
+        self._chat_mode = False
         if self._chat_panel is not None:
+            self._chat_width = self.width()
             self._chat_panel.hide()
         self.island.set_visibility_suppressed(False)
         self._resize_to_content()
         self.island.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
     def _on_cancel_requested(self):
-        if self._chat_panel is not None and self._chat_panel.isVisible():
+        if self._chat_mode:
             self._hide_ai_chat_panel()
         else:
             self.exit_requested.emit()
@@ -271,12 +303,92 @@ class MiniModeWindow(QWidget):
 
         return False
 
+    def _handle_resize_event(self, _obj, event):
+        if not self._chat_mode_active():
+            return False
+
+        global_pos = event.globalPosition().toPoint()
+        if event.type() == QEvent.Type.MouseMove:
+            if self._using_system_resize:
+                return True
+            if self._resize_start_geometry is not None:
+                self._resize_manually(global_pos)
+                return True
+            edges = self._resize_edges_at(global_pos)
+            if edges is not None:
+                self.setCursor(Qt.CursorShape.SizeHorCursor)
+            else:
+                self.unsetCursor()
+            return False
+
+        if event.type() == QEvent.Type.MouseButtonPress:
+            if event.button() != Qt.MouseButton.LeftButton:
+                return False
+            edges = self._resize_edges_at(global_pos)
+            if edges is None:
+                return False
+            if self._start_system_resize(edges):
+                self._using_system_resize = True
+            else:
+                self._resize_global_pos = global_pos
+                self._resize_start_geometry = self.frameGeometry()
+                self._resize_edges = edges
+            return True
+
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            if self._using_system_resize or self._resize_start_geometry is not None:
+                self._using_system_resize = False
+                self._resize_global_pos = None
+                self._resize_start_geometry = None
+                self._resize_edges = None
+                return True
+        return False
+
+    def _resize_edges_at(self, global_pos):
+        geometry = self.frameGeometry()
+        if global_pos.x() <= geometry.left() + RESIZE_MARGIN:
+            return Qt.Edge.LeftEdge
+        if global_pos.x() >= geometry.right() - RESIZE_MARGIN:
+            return Qt.Edge.RightEdge
+        return None
+
+    def _resize_manually(self, global_pos):
+        start_geometry = self._resize_start_geometry
+        start_pos = self._resize_global_pos
+        if start_geometry is None or start_pos is None:
+            return
+
+        delta_x = global_pos.x() - start_pos.x()
+        width = start_geometry.width()
+        if self._resize_edges == Qt.Edge.LeftEdge:
+            width -= delta_x
+        else:
+            width += delta_x
+
+        width = max(self.minimumWidth(), width)
+        if self.maximumWidth() < 16777215:
+            width = min(self.maximumWidth(), width)
+        if self._resize_edges == Qt.Edge.LeftEdge:
+            x = start_geometry.right() - width + 1
+        else:
+            x = start_geometry.x()
+        self.setGeometry(x, start_geometry.y(), width, self.height())
+
     def _start_system_move(self):
         handle = self.windowHandle()
         if handle is None:
             return False
         try:
             return bool(handle.startSystemMove())
+        except RuntimeError:
+            return False
+
+    def _start_system_resize(self, edges):
+        handle = self.windowHandle()
+        if handle is None:
+            return False
+        try:
+            return bool(handle.startSystemResize(edges))
         except RuntimeError:
             return False
 
@@ -331,10 +443,24 @@ class MiniModeWindow(QWidget):
         return False
 
     def _resize_to_content(self):
-        self.layout().activate()
-        size = self.sizeHint()
-        if size.isValid() and self.size() != size:
-            self.setFixedSize(size)
+        if self._resizing_to_content:
+            return
+        self._resizing_to_content = True
+        try:
+            self.layout().activate()
+            size = self.sizeHint()
+            if not size.isValid():
+                return
+            if self._chat_mode_active():
+                if self.height() != size.height():
+                    self.resize(self.width(), size.height())
+            elif self.size() != size:
+                self.setFixedSize(size)
+        finally:
+            self._resizing_to_content = False
+
+    def _chat_mode_active(self):
+        return self._chat_mode
 
     def _resize_to_island(self):
         self._resize_to_content()

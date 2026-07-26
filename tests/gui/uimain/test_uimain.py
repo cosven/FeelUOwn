@@ -1012,6 +1012,20 @@ def test_dynamic_island_progress_updates_only_when_expanded(qtbot, app_mock, moc
     update.assert_called_once()
 
 
+def test_dynamic_island_respects_available_width(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    island = DynamicIslandStatusBar(app_mock)
+    qtbot.addWidget(island)
+    island.set_available_width(180)
+
+    island._start_expand()
+    while island._animating:
+        island._tick_animation()
+
+    assert island.width() == 180
+    assert island._expanded_width() == 180
+
+
 class _FakeMouseEvent:
     def __init__(
         self,
@@ -1176,6 +1190,35 @@ def test_mini_mode_window_prefers_system_move(qtbot, app_mock, monkeypatch):
     assert not window._using_system_move
 
 
+def test_mini_mode_window_resizes_from_right_edge(qtbot, app_mock, monkeypatch):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = FakeAI()
+    window = MiniModeWindow(app_mock)
+    qtbot.addWidget(window)
+    window.show()
+    window._toggle_ai_chat_panel()
+    monkeypatch.setattr(window, "_start_system_resize", lambda _edges: False)
+
+    start_geometry = window.frameGeometry()
+    start_pos = QPointF(start_geometry.right(), start_geometry.center().y())
+    moved_pos = QPointF(start_geometry.right() + 40, start_geometry.center().y())
+
+    assert window._handle_resize_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseButtonPress, start_pos),
+    )
+    assert window._handle_resize_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseMove, moved_pos),
+    )
+    assert window._handle_resize_event(
+        window,
+        _FakeMouseEvent(QEvent.Type.MouseButtonRelease, moved_pos),
+    )
+
+    assert window.width() == start_geometry.width() + 40
+
+
 def test_mini_mode_window_does_not_drag_from_controls(qtbot, app_mock):
     _prepare_dynamic_island_app(app_mock)
     window = MiniModeWindow(app_mock)
@@ -1253,6 +1296,24 @@ def test_mini_ai_chat_panel_renders_streaming_response(qtbot, app_mock):
     assert len(tool_events) == 1
     assert "create_song_suggestions_artifact" in tool_events[0].text()
     assert panel.input_widget._editor.minimumHeight() == 34
+
+
+def test_mini_ai_chat_island_fits_input_footer(qtbot, app_mock):
+    _prepare_dynamic_island_app(app_mock)
+    app_mock.ai = FakeAI()
+    panel = MiniAIChatPanel(app_mock)
+    qtbot.addWidget(panel)
+    panel.resize(340, panel.sizeHint().height())
+    panel.show()
+    qtbot.wait(0)
+
+    footer = panel.input_widget._footer_layout
+    available_width = (
+        footer.geometry().width()
+        - panel.input_widget._send_btn.sizeHint().width()
+        - footer.spacing()
+    )
+    assert panel.island.width() <= available_width
 
 
 def test_mini_mode_manager_hides_and_restores_main_window(qtbot, app_mock):

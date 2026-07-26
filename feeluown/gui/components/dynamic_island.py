@@ -81,6 +81,7 @@ class DynamicIslandStatusBar(QWidget):
         self._anim_current = 0  # current animated width
         self._has_song = False
         self._visibility_suppressed = False
+        self._available_width = None
         self._compact_text = ""
         self._position = _number_or_zero(self._app.player.position)
         self._duration = _number_or_zero(self._app.player.duration)
@@ -161,7 +162,7 @@ class DynamicIslandStatusBar(QWidget):
                 Qt.AlignmentFlag.AlignVCenter,
             )
             self._trailing_widget.hide()
-        self.setFixedWidth(self._calc_compact_width())
+        self._set_width(self._calc_compact_width())
 
     def _connect_signals(self):
         """Wire up player and lyric signals."""
@@ -203,6 +204,21 @@ class DynamicIslandStatusBar(QWidget):
             self.hide()
         else:
             self._sync_current_state()
+
+    def set_available_width(self, width):
+        """Limit the island width to the space provided by its parent."""
+        self._available_width = None if width is None else max(1, int(width))
+        if self._animating:
+            self._anim_current = self._constrain_width(self._anim_current)
+            self._anim_from = self._anim_current
+            self._anim_to = self._constrain_width(self._anim_to)
+            self._set_width(self._anim_current)
+            return
+
+        if self._expansion_state == "expanded":
+            self._set_width(self._expanded_width())
+        else:
+            self._set_width(self._calc_compact_width())
 
     # ---- protected slots ----
 
@@ -377,7 +393,7 @@ class DynamicIslandStatusBar(QWidget):
         return CONTENT_SPACING + max(widget.width(), widget.sizeHint().width())
 
     def _expanded_width(self):
-        return EXPANDED_WIDTH + self._trailing_width()
+        return self._constrain_width(EXPANDED_WIDTH + self._trailing_width())
 
     def _playback_progress(self):
         if not self._duration:
@@ -457,7 +473,7 @@ class DynamicIslandStatusBar(QWidget):
 
         # Adjust width to fit new lyric text
         if not self._animating:
-            self.setFixedWidth(self._calc_compact_width())
+            self._set_width(self._calc_compact_width())
 
     def _start_expand(self):
         """Begin expanding toward the expanded state."""
@@ -501,7 +517,7 @@ class DynamicIslandStatusBar(QWidget):
             self._anim_current = self._anim_to
             done = True
 
-        self.setFixedWidth(int(self._anim_current))
+        self._set_width(self._anim_current)
 
         # Switch content visibility at progress threshold
         total = abs(self._anim_to - self._anim_from)
@@ -549,7 +565,16 @@ class DynamicIslandStatusBar(QWidget):
         """Finalize the state after animation completes."""
         if self._anim_to == self._expanded_width():
             self._switch_to_expanded()
-            self.setFixedWidth(self._expanded_width())
+            self._set_width(self._expanded_width())
         else:
             self._switch_to_compact()
-            self.setFixedWidth(self._calc_compact_width())
+            self._set_width(self._calc_compact_width())
+
+    def _constrain_width(self, width):
+        width = max(1, int(width))
+        if self._available_width is not None:
+            return min(width, self._available_width)
+        return width
+
+    def _set_width(self, width):
+        self.setFixedWidth(self._constrain_width(width))
