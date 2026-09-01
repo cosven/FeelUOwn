@@ -1,9 +1,19 @@
+import json
 import logging
 import time
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlencode, urlparse
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QEvent, QMargins, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import (
+    QMargins,
+    QObject,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt6.QtGui import (
     QFont,
     QGuiApplication,
@@ -24,15 +34,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from langchain_core.callbacks import BaseCallbackHandler
 
 from feeluown.ai import SongSuggestion
 from feeluown.app.gui_app import GuiApp
 from feeluown.gui.components.search import create_search_result_view
-from feeluown.gui.helpers import IS_MACOS, secondary_text_color
+from feeluown.gui.helpers import secondary_text_color
 from feeluown.gui.widgets import PlayButton, PlusButton
 from feeluown.gui.widgets.textbtn import TextButton
-from feeluown.gui.widgets.header import MidHeader
 from feeluown.gui.components.dynamic_island import DynamicIslandStatusBar
+from feeluown.gui.components.ai_radio_config import AIRadioConfigView
 from feeluown.gui.widgets.ai_chat import (
     ChatHistoryWidget,
     ChatInputWidget,
@@ -52,15 +63,68 @@ from feeluown.library import BriefSongModel, ModelState, ResolveFailed, parse_li
 from feeluown.i18n import t
 from feeluown.utils import aio
 
+if TYPE_CHECKING:
+    from feeluown.app import App
+
 logger = logging.getLogger(__name__)
 
 
-def _create_titlebar_mode(app):
-    if not IS_MACOS:
-        return None
-    from feeluown.gui.macos_titlebar import MacOSNativeTitlebarMode
+def _format_tool_call_args(args: dict | None) -> str:
+    """Format tool call arguments for display."""
+    if not args:
+        return ""
+    return json.dumps(args, ensure_ascii=False)
 
-    return MacOSNativeTitlebarMode(app)
+
+def _format_tool_output(output) -> str:
+    """Format a tool call result for display."""
+    content = getattr(output, "content", output)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, (dict, list)):
+        return json.dumps(content, ensure_ascii=False)
+    return str(content)
+
+
+class _ToolCallSignaler(QObject):
+    tool_called = pyqtSignal(str, str, str)
+    tool_finished = pyqtSignal(str, str)
+
+
+class AIToolCallCallback(BaseCallbackHandler):
+    """Show tool calls (with arguments) in the chat history."""
+
+    raise_error = True
+
+    def __init__(self, on_tool_called, on_tool_finished):
+        super().__init__()
+        # on_tool_start may run on a worker thread (sync tools are executed in
+        # a thread pool), so hand off to the GUI thread via a queued signal.
+        self._signaler = _ToolCallSignaler()
+        self._signaler.tool_called.connect(on_tool_called)
+        self._signaler.tool_finished.connect(on_tool_finished)
+
+    def on_tool_start(
+        self,
+        serialized,
+        input_str,
+        *,
+        run_id,
+        inputs=None,
+        tool_call_id=None,
+        **kwargs,
+    ):
+        tool_name = serialized.get("name", "")
+        args = _format_tool_call_args(inputs)
+        self._signaler.tool_called.emit(tool_name, args, str(run_id))
+
+    def on_tool_end(self, output, *, run_id, **kwargs):
+        self._signaler.tool_finished.emit(
+            str(run_id), _format_tool_output(output)
+        )
+
+    def on_tool_error(self, error, *, run_id, **kwargs):
+        self._signaler.tool_finished.emit(str(run_id), str(error))
 
 
 @dataclass
@@ -138,7 +202,7 @@ def parse_song_link_info(url: str):
 
 
 class SongSuggestionItemWidget(QWidget):
-    row_height = 56
+    row_height = 40
     _palette_ready = False
 
     def __init__(self, song: BriefSongModel, list_view: QListWidget):
@@ -461,7 +525,7 @@ class AIChatBox(QWidget):
     working_state_changed = pyqtSignal(bool)
     playlist_sidebar_requested = pyqtSignal()
 
-    def __init__(self, app, parent=None):
+    def __init__(self, app: 'App', parent=None):
         super().__init__(parent=parent)
         self._app = app
         self.copilot = self._app.ai.get_copilot()
@@ -474,6 +538,12 @@ class AIChatBox(QWidget):
         )
         self._collecting_artifacts = False
         self._pending_artifacts = []
+        self._tool_cards = {}
+        self._tool_callback = AIToolCallCallback(
+            self._on_tool_called,
+            self._on_tool_finished,
+        )
+        self.copilot.add_callback(self._tool_callback)
 
         self.input_widget.send_clicked.connect(
             lambda q: aio.run_afn_ref(self.exec_user_query, q)
@@ -491,6 +561,16 @@ class AIChatBox(QWidget):
         self._app.playlist.mode_changed.connect(self._refresh_context)
         self.setup_ui()
         self._refresh_context()
+
+    def _on_tool_called(self, tool_name, args, run_id):
+        card = self.history_widget.add_tool_event(tool_name, args)
+        if run_id:
+            self._tool_cards[run_id] = card
+
+    def _on_tool_finished(self, run_id, output):
+        card = self._tool_cards.pop(run_id, None)
+        if card is not None:
+            card.set_output(output)
 
     def setup_ui(self):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -549,9 +629,6 @@ class AIChatBox(QWidget):
                         self.playlist_sidebar_requested.emit()
                     if current_label is not None and response_message.strip():
                         current_label.set_markdown(response_message)
-                    self.history_widget.add_tool_event(
-                        t("ai-chat-tool-called", tool=token.name)
-                    )
                     current_label = None
                     response_message = ""
                     seen_tool = True
@@ -620,7 +697,6 @@ class Body(QWidget):
         self._updating_palette = False
         self._palette_refresh_scheduled = False
         self._palette_ready = False
-        self._header = MidHeader(t("ai-chat-header"))
         self._new_thread_btn = TextButton(t("ai-chat-new"), height=26)
         self._sidebar_btn = TextButton(t("ai-chat-open-sidebar"), height=26)
         self._collapse_btn = TextButton(t("fold-collapse"), height=26)
@@ -655,6 +731,7 @@ class Body(QWidget):
         self._sidebar_status_label = QLabel("")
         self._sidebar_status_label.setWordWrap(True)
         self._sidebar_status_label.hide()
+        self._ai_radio_config = AIRadioConfigView(self._app, self._sidebar_panel)
         header_font = self._sidebar_header.font()
         header_font.setPixelSize(13)
         header_font.setWeight(QFont.Weight.DemiBold)
@@ -666,6 +743,7 @@ class Body(QWidget):
         self._sidebar_layout.addWidget(self._sidebar_header)
         self._sidebar_layout.addWidget(self._right_sidebar_stack, 1)
         self._sidebar_layout.addWidget(self._sidebar_status_label)
+        self._sidebar_layout.addWidget(self._ai_radio_config)
         self._sidebar_panel.hide()
         self._sidebar_shadow = SidebarShadow(self)
         self._sidebar_shadow.hide()
@@ -682,19 +760,15 @@ class Body(QWidget):
         self._app.playlist.mode_changed.connect(self._refresh_context)
 
         self._layout = QVBoxLayout(self)
-        if IS_MACOS:
-            self._layout.setContentsMargins(86, 10, 10, 10)
-        else:
-            self._layout.setContentsMargins(10, 10, 10, 10)
+        self._layout.setContentsMargins(10, 10, 10, 10)
         self._layout.setSpacing(10)
         self._toolbar = DraggableToolbar(self)
         self._toolbar_separator = ToolbarSeparator(self)
         self._toolbar_layout = QHBoxLayout(self._toolbar)
         self._content_layout = QHBoxLayout()
         self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        self._toolbar_layout.addWidget(self._header)
-        self._toolbar_layout.addStretch(0)
         self._toolbar_layout.addWidget(self._new_thread_btn)
+        self._toolbar_layout.addStretch(0)
         self._toolbar_layout.addWidget(self._sidebar_btn)
         self._toolbar_layout.addWidget(self._collapse_btn)
 
@@ -793,6 +867,7 @@ class Body(QWidget):
             self._refresh_artist_labels()
 
             self._sidebar_status_label.setPalette(app_pal)
+            self._ai_radio_config.apply_palette()
             self._sidebar_shadow.setPalette(body_pal)
             self.update()
             self._toolbar_separator.update()
@@ -928,8 +1003,7 @@ class Body(QWidget):
         return self._app.ai.get_active_radio()
 
     def _refresh_context(self, *_):
-        self._header.setText(t("ai-chat-header"))
-        self._connect_ai_radio_status()
+        # self._connect_ai_radio_status()
         self._sync_sidebar_status_visibility()
 
     def _connect_ai_radio_status(self):
@@ -959,6 +1033,17 @@ class Body(QWidget):
             and bool(self._sidebar_status_label.text())
         )
         self._sidebar_status_label.setVisible(visible)
+        self._update_ai_radio_config_visibility()
+
+    def _update_ai_radio_config_visibility(self):
+        radio_active = (
+            self._app.ai is not None
+            and self._app.ai.get_active_radio() is not None
+        )
+        self._ai_radio_config.set_visible(
+            radio_active
+            and self._right_sidebar_stack.currentWidget() is self._playlist_sidebar
+        )
 
 
 class AIChatOverlay(AppOverlayContainer):
@@ -973,43 +1058,6 @@ class AIChatOverlay(AppOverlayContainer):
                 close_on_focus_in=False,
             ),
         )
-        self._titlebar_mode = _create_titlebar_mode(app)
-        self._titlebar_reapply_scheduled = False
-        self.body._schedule_palette_refresh(force=True)
-
-    def showEvent(self, event):
-        if self._titlebar_mode is not None:
-            self._titlebar_mode.enter()
-        super().showEvent(event)
-        self.body._schedule_palette_refresh(force=True)
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        if self._titlebar_mode is not None:
-            self._titlebar_mode.exit()
-
-    def eventFilter(self, obj, event):
-        result = super().eventFilter(obj, event)
-        if (
-            self.isVisible()
-            and obj == self._app
-            and self._titlebar_mode is not None
-            and event.type()
-            in (QEvent.Type.Resize, QEvent.Type.WindowStateChange)
-        ):
-            self._schedule_titlebar_reapply()
-        return result
-
-    def _schedule_titlebar_reapply(self):
-        if self._titlebar_reapply_scheduled:
-            return
-        self._titlebar_reapply_scheduled = True
-        QTimer.singleShot(0, self._reapply_titlebar_mode)
-
-    def _reapply_titlebar_mode(self):
-        self._titlebar_reapply_scheduled = False
-        if self.isVisible() and self._titlebar_mode is not None:
-            self._titlebar_mode.reapply()
 
 
 def create_aichat_overlay(app: "GuiApp", parent=None) -> AppOverlayContainer:
@@ -1024,8 +1072,27 @@ if __name__ == "__main__":
     with simple_layout(theme="dark") as layout, mock_app() as app:
         app.size.return_value = QSize(600, 400)
         overlay = create_aichat_overlay(app)
-        overlay.body._chat_box.history_widget.add_message("user", "hello world")
-        overlay.body._chat_box.history_widget.add_message("assistant", "Hi, 我是你的音乐助手")
-        overlay.body._chat_box.history_widget.add_message("tools", "tools: play_model")
+        history = overlay.body._chat_box.history_widget
+        history.add_message("user", "hello world")
+        history.add_message("assistant", "Hi, 我是你的音乐助手")
+        # Tool events: default shows only the tool name; click to expand and
+        # reveal the call arguments and result output. Below is a collapsed
+        # card and an expanded one for visual verification.
+        history.add_tool_event("playback_get_state")
+        tool_card = history.add_tool_event(
+            "library_search", args='{"keyword": "周杰伦", "timeout": 8}'
+        )
+        tool_card.set_output(
+            '{"ok": true, "action": "search", "message": "", '
+            '"data": {"count": 3, "songs": ['
+            '{"title": "晴天", "artists": "周杰伦", "album": "叶惠美", '
+            '"duration": 269, "uri": "fuo://netease/songs/186016"}, '
+            '{"title": "七里香", "artists": "周杰伦", "album": "七里香", '
+            '"duration": 300, "uri": "fuo://netease/songs/186001"}, '
+            '{"title": "夜曲", "artists": "周杰伦", "album": "十一月的萧邦", '
+            '"duration": 226, "uri": "fuo://netease/songs/185907"}]}, '
+            '"error": null}'
+        )
+        tool_card.set_expanded(True)
         overlay.show()
         layout.addWidget(overlay)
